@@ -1,0 +1,51 @@
+src/mainview/App.tsx
+  s_bfcc3192102398::t_ee29ae57b0382f 37,40-41
+  s_bfcc3192102398::t_a4c893c19e66c2 1,4-32,38-39,42-67,69-97,99,101-126,128-152
+src/mainview/components/ui/button.tsx
+  s_bfcc3192102398::t_0b5c9c25423261 1-58
+vite.config.ts
+  s_bfcc3192102398::t_2cc9904b83fb4b 4,8-12
+  s_bfcc3192102398::t_a74ea929cb5722 3,7
+src/mainview/index.css
+  s_bfcc3192102398::t_0b5c9c25423261 2-5,48-50,52-84,86-117,119-128
+  s_bfcc3192102398::t_e08492e42f7d32 6-47,51,85,118
+  s_bfcc3192102398::t_8f9f9607bf3b71 1,129
+package.json
+  s_bfcc3192102398::t_4636d1c72961c9 26,32
+  s_bfcc3192102398::t_0b5c9c25423261 13-16,18,20-23
+src/mainview/components/ui/badge.tsx
+  s_bfcc3192102398::t_2fa1cfb3a278ac 1-52
+src/mainview/components/ui/separator.tsx
+  s_bfcc3192102398::t_2fa1cfb3a278ac 1-23
+AGENT.md
+  h_bafa96d59b1234 1-2
+tsconfig.json
+  s_bfcc3192102398::t_711307f0690d18 17-21
+components.json
+  s_bfcc3192102398::t_0b5c9c25423261 1-25
+src/mainview/lib/utils.ts
+  s_bfcc3192102398::t_0b5c9c25423261 1-6
+src/mainview/components/ui/card.tsx
+  s_bfcc3192102398::t_2fa1cfb3a278ac 1-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4b7b8af933fd345b64d662681c2c3b05885769a6",
+  "prompts": {},
+  "humans": {
+    "h_bafa96d59b1234": {
+      "author": "PosiNorth <nofacer@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_bfcc3192102398": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e6ebf-5e84-7ae3-b247-8a5f0daa48f2",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
