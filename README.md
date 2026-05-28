@@ -1,6 +1,6 @@
-# React + Tailwind + Vite Electrobun Template
+# React + shadcn + Vite Electrobun Template
 
-A fast Electrobun desktop app template with React, Tailwind CSS, and Vite for hot module replacement (HMR).
+A fast Electrobun desktop app template with React, Tailwind CSS v4, shadcn/base UI, and Vite for hot module replacement (HMR).
 
 ## Getting Started
 
@@ -14,11 +14,20 @@ bun run dev
 # Development with HMR (recommended)
 bun run dev:hmr
 
+# Lint the project
+bun run lint
+
+# Format the project
+bun run format
+
+# Run the full local quality gate
+bun run check
+
 # Build for production
 bun run build
 
 # Build for production release
-bun run build:prod
+bun run build:canary
 ```
 
 ## How HMR Works
@@ -44,18 +53,39 @@ When you run `bun run dev` (without HMR):
 │   └── mainview/
 │       ├── App.tsx         # React app component
 │       ├── main.tsx        # React entry point
+│       ├── components/ui/  # shadcn base UI components
+│       ├── lib/utils.ts    # Shared utilities
 │       ├── index.html      # HTML template
-│       └── index.css       # Tailwind CSS
+│       └── index.css       # Tailwind v4 + theme tokens
 ├── electrobun.config.ts    # Electrobun configuration
 ├── vite.config.ts          # Vite configuration
-├── tailwind.config.js      # Tailwind configuration
+├── components.json         # shadcn configuration
+├── biome.json              # Biome linter/formatter config
+├── .editorconfig           # Shared editor defaults
 └── package.json
 ```
 
 ## Customizing
 
 - **React components**: Edit files in `src/mainview/`
-- **Tailwind theme**: Edit `tailwind.config.js`
+- **Tailwind theme**: Edit `src/mainview/index.css`
+- **shadcn components**: Add or update files in `src/mainview/components/ui/`
 - **Vite settings**: Edit `vite.config.ts`
 - **Window settings**: Edit `src/bun/index.ts`
 - **App metadata**: Edit `electrobun.config.ts`
+
+## Quality Checks
+
+- `bun run lint`: run Biome checks
+- `bun run lint:fix`: apply safe Biome fixes
+- `bun run format`: format the codebase with Biome
+- `bun run check`: run lint, TypeScript, and production build together
+
+GitHub Actions runs `bun run check` on pushes and pull requests.
+
+## Git Hooks
+
+This repo uses `husky` and `lint-staged` for a lightweight pre-commit check.
+
+- On commit, staged `js`, `ts`, `tsx`, `json`, `css`, and `md` files are passed through `biome check --write`
+- To re-enable hooks after a fresh install, run `bun run prepare`

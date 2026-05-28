@@ -1,4 +1,9 @@
-import { ArrowRightIcon, FlameIcon, RefreshCwIcon, SparklesIcon } from "lucide-react";
+import {
+	ArrowRightIcon,
+	FlameIcon,
+	RefreshCwIcon,
+	SparklesIcon,
+} from "lucide-react";
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -20,11 +25,13 @@ const workflowSteps = [
 	},
 	{
 		title: "Style",
-		description: "Applied the nova preset tokens and typography into the shared CSS entry.",
+		description:
+			"Applied the nova preset tokens and typography into the shared CSS entry.",
 	},
 	{
 		title: "Compose",
-		description: "Wired UI source files into the app through local components and aliases.",
+		description:
+			"Wired UI source files into the app through local components and aliases.",
 	},
 ];
 
@@ -50,8 +57,9 @@ function App() {
 									shadcn has been integrated into this Electrobun app.
 								</h1>
 								<p className="max-w-2xl text-base leading-7 text-muted-foreground lg:text-lg">
-									The project now uses the <code>base-nova</code> setup, local UI
-									source files, and semantic design tokens from the shadcn preset.
+									The project now uses the <code>base-nova</code> setup, local
+									UI source files, and semantic design tokens from the shadcn
+									preset.
 								</p>
 							</div>
 							<div className="flex flex-wrap gap-3">
@@ -70,8 +78,8 @@ function App() {
 							<CardHeader>
 								<CardTitle>Integration status</CardTitle>
 								<CardDescription>
-									Core shadcn pieces are installed and ready for further component
-									expansion.
+									Core shadcn pieces are installed and ready for further
+									component expansion.
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="flex flex-col gap-4">
@@ -85,7 +93,9 @@ function App() {
 								</div>
 								<div className="flex items-center justify-between">
 									<span className="text-muted-foreground">Alias</span>
-									<code className="rounded bg-muted px-2 py-1 text-xs">@/...</code>
+									<code className="rounded bg-muted px-2 py-1 text-xs">
+										@/...
+									</code>
 								</div>
 							</CardContent>
 							<CardFooter>
