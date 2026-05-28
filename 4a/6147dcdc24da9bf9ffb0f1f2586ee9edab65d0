@@ -1,0 +1,19 @@
+LICENSE
+  s_8e3b2d6abfb7ed::t_1315a576f05be9 1-201
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4a6147dcdc24da9bf9ffb0f1f2586ee9edab65d0",
+  "prompts": {},
+  "sessions": {
+    "s_8e3b2d6abfb7ed": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e6e5b-906b-7f50-baa4-6cfd1afbd059",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
