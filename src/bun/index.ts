@@ -1,4 +1,11 @@
-import { BrowserWindow, Updater } from "electrobun/bun";
+import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
+import type { UpsertJenkinsInstanceInput } from "../shared/jenkins";
+import type { AppRPCSchema } from "../shared/rpc";
+import {
+	deleteJenkinsInstance,
+	listJenkinsInstances,
+	saveJenkinsInstance,
+} from "./jenkins-store";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -23,9 +30,22 @@ async function getMainViewUrl(): Promise<string> {
 // Create the main application window
 const url = await getMainViewUrl();
 
+const appRpc = BrowserView.defineRPC<AppRPCSchema>({
+	handlers: {
+		requests: {
+			listJenkinsInstances: () => listJenkinsInstances(),
+			saveJenkinsInstance: (params: UpsertJenkinsInstanceInput) =>
+				saveJenkinsInstance(params),
+			deleteJenkinsInstance: ({ id }: { id: string }) =>
+				deleteJenkinsInstance(id),
+		},
+	},
+});
+
 new BrowserWindow({
 	title: "React + Tailwind + Vite",
 	url,
+	rpc: appRpc,
 	frame: {
 		width: 900,
 		height: 700,

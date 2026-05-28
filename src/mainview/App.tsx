@@ -1,10 +1,12 @@
 import {
-	ArrowRightIcon,
-	FlameIcon,
-	RefreshCwIcon,
-	SparklesIcon,
+	LoaderCircleIcon,
+	PencilLineIcon,
+	PlusIcon,
+	ServerCogIcon,
+	ShieldCheckIcon,
+	Trash2Icon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,153 +18,361 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import type {
+	JenkinsInstanceSummary,
+	UpsertJenkinsInstanceInput,
+} from "../shared/jenkins";
+import { appRpc } from "./lib/app-rpc";
 
-const workflowSteps = [
-	{
-		title: "Initialize",
-		description: "Scaffolded shadcn for Vite with the base primitive layer.",
-	},
-	{
-		title: "Style",
-		description:
-			"Applied the nova preset tokens and typography into the shared CSS entry.",
-	},
-	{
-		title: "Compose",
-		description:
-			"Wired UI source files into the app through local components and aliases.",
-	},
-];
+type FormState = {
+	id?: string;
+	hostUrl: string;
+	username: string;
+	apiKey: string;
+};
 
-const stackItems = ["Electrobun", "React 18", "Tailwind CSS", "shadcn/base"];
+const emptyForm: FormState = {
+	hostUrl: "",
+	username: "",
+	apiKey: "",
+};
 
 function App() {
-	const [count, setCount] = useState(0);
+	const [instances, setInstances] = useState<JenkinsInstanceSummary[]>([]);
+	const [form, setForm] = useState<FormState>(emptyForm);
+	const [isLoading, setIsLoading] = useState(true);
+	const [isSaving, setIsSaving] = useState(false);
+	const [isDeleting, setIsDeleting] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [status, setStatus] = useState<string | null>(null);
+
+	useEffect(() => {
+		setIsLoading(true);
+		setError(null);
+
+		void appRpc.request
+			.listJenkinsInstances()
+			.then((nextInstances) => {
+				setInstances(nextInstances);
+			})
+			.catch((nextError) => {
+				setError(getErrorMessage(nextError));
+			})
+			.finally(() => {
+				setIsLoading(false);
+			});
+	}, []);
+
+	function startCreate() {
+		setForm(emptyForm);
+		setError(null);
+		setStatus(null);
+	}
+
+	function startEdit(instance: JenkinsInstanceSummary) {
+		setForm({
+			id: instance.id,
+			hostUrl: instance.hostUrl,
+			username: instance.username,
+			apiKey: "",
+		});
+		setError(null);
+		setStatus(
+			instance.hasApiKey
+				? "Leave API key empty to keep the stored secret unchanged."
+				: "This instance does not have an API key stored yet.",
+		);
+	}
+
+	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+		event.preventDefault();
+		setIsSaving(true);
+		setError(null);
+		setStatus(null);
+
+		const payload: UpsertJenkinsInstanceInput = {
+			id: form.id,
+			hostUrl: form.hostUrl,
+			username: form.username,
+			apiKey: form.apiKey,
+		};
+
+		if (!payload.id && !payload.apiKey?.trim()) {
+			setError("An API key is required when adding a new instance.");
+			setIsSaving(false);
+			return;
+		}
+
+		try {
+			const nextInstances = await appRpc.request.saveJenkinsInstance(payload);
+			setInstances(nextInstances);
+			setForm(emptyForm);
+			setStatus(
+				payload.id
+					? "Instance updated. API key is stored in the system credential manager."
+					: "Instance added. API key is stored in the system credential manager.",
+			);
+		} catch (nextError) {
+			setError(getErrorMessage(nextError));
+		} finally {
+			setIsSaving(false);
+		}
+	}
+
+	async function handleDelete(instanceId: string) {
+		setIsDeleting(instanceId);
+		setError(null);
+		setStatus(null);
+
+		try {
+			const nextInstances = await appRpc.request.deleteJenkinsInstance({
+				id: instanceId,
+			});
+			setInstances(nextInstances);
+			if (form.id === instanceId) {
+				setForm(emptyForm);
+			}
+			setStatus("Instance removed.");
+		} catch (nextError) {
+			setError(getErrorMessage(nextError));
+		} finally {
+			setIsDeleting(null);
+		}
+	}
 
 	return (
 		<div className="theme min-h-screen bg-background">
-			<div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-10 px-6 py-10 lg:px-10">
-				<section className="relative overflow-hidden rounded-[2rem] border bg-card text-card-foreground shadow-sm">
-					<div className="absolute inset-0 bg-gradient-to-br from-muted/80 via-background to-background" />
-					<div className="absolute -top-24 left-0 size-72 rounded-full bg-primary/5 blur-3xl" />
-					<div className="relative flex flex-col gap-8 p-8 lg:flex-row lg:items-end lg:justify-between lg:p-10">
-						<div className="flex max-w-3xl flex-col gap-5">
+			<div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-8 lg:px-10">
+				<section className="flex flex-col gap-4 rounded-[2rem] border bg-card p-8 shadow-sm">
+					<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+						<div className="flex max-w-3xl flex-col gap-3">
 							<Badge variant="secondary">
-								<SparklesIcon data-icon="inline-start" />
-								Base UI + Nova
+								<ServerCogIcon data-icon="inline-start" />
+								Jenkins Instances
 							</Badge>
-							<div className="flex flex-col gap-3">
-								<h1 className="font-heading text-4xl leading-tight font-medium tracking-tight lg:text-6xl">
-									shadcn has been integrated into this Electrobun app.
+							<div className="flex flex-col gap-2">
+								<h1 className="font-heading text-4xl leading-tight font-medium tracking-tight">
+									Manage multiple Jenkins connections locally.
 								</h1>
-								<p className="max-w-2xl text-base leading-7 text-muted-foreground lg:text-lg">
-									The project now uses the <code>base-nova</code> setup, local
-									UI source files, and semantic design tokens from the shadcn
-									preset.
+								<p className="max-w-2xl text-base leading-7 text-muted-foreground">
+									Each instance stores host URL and username in app config,
+									while the API key is kept in the system credential manager.
 								</p>
 							</div>
-							<div className="flex flex-wrap gap-3">
-								<Button onClick={() => setCount((value) => value + 1)}>
-									<FlameIcon data-icon="inline-start" />
-									Count: {count}
-								</Button>
-								<Button onClick={() => setCount(0)} variant="outline">
-									<RefreshCwIcon data-icon="inline-start" />
-									Reset
-								</Button>
-							</div>
 						</div>
-
-						<Card className="w-full max-w-sm border bg-background/90 backdrop-blur">
-							<CardHeader>
-								<CardTitle>Integration status</CardTitle>
-								<CardDescription>
-									Core shadcn pieces are installed and ready for further
-									component expansion.
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="flex flex-col gap-4">
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">Preset</span>
-									<Badge variant="outline">nova</Badge>
-								</div>
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">Primitive layer</span>
-									<Badge variant="outline">base ui</Badge>
-								</div>
-								<div className="flex items-center justify-between">
-									<span className="text-muted-foreground">Alias</span>
-									<code className="rounded bg-muted px-2 py-1 text-xs">
-										@/...
-									</code>
-								</div>
-							</CardContent>
-							<CardFooter>
-								<Button variant="ghost">
-									Next: add more components
-									<ArrowRightIcon data-icon="inline-end" />
-								</Button>
-							</CardFooter>
-						</Card>
+						<Button onClick={startCreate} variant="outline">
+							<PlusIcon data-icon="inline-start" />
+							Add instance
+						</Button>
 					</div>
+
+					{status ? (
+						<div className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm">
+							{status}
+						</div>
+					) : null}
+
+					{error ? (
+						<div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+							{error}
+						</div>
+					) : null}
 				</section>
 
-				<section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+				<section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
 					<Card>
 						<CardHeader>
-							<CardTitle>What changed</CardTitle>
+							<CardTitle>Saved instances</CardTitle>
 							<CardDescription>
-								The app was moved from raw Tailwind markup to shadcn-managed UI
-								source files.
+								Edit an existing Jenkins connection or add a new one.
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-4">
-							{workflowSteps.map((step, index) => (
-								<div key={step.title} className="flex flex-col gap-4">
-									<div className="flex items-start gap-4">
-										<Badge variant="secondary">{index + 1}</Badge>
-										<div className="flex flex-col gap-1">
-											<h3 className="font-medium">{step.title}</h3>
-											<p className="text-sm leading-6 text-muted-foreground">
-												{step.description}
-											</p>
-										</div>
-									</div>
-									{index < workflowSteps.length - 1 ? <Separator /> : null}
+							{isLoading ? (
+								<div className="flex items-center gap-3 rounded-xl border bg-muted/50 px-4 py-6 text-sm text-muted-foreground">
+									<LoaderCircleIcon className="animate-spin" />
+									Loading instances...
 								</div>
-							))}
+							) : instances.length === 0 ? (
+								<div className="rounded-2xl border border-dashed bg-muted/40 px-5 py-8 text-sm text-muted-foreground">
+									No Jenkins instances saved yet. Add your first instance to get
+									started.
+								</div>
+							) : (
+								instances.map((instance, index) => (
+									<div key={instance.id} className="flex flex-col gap-4">
+										<div className="flex flex-col gap-4 rounded-2xl border bg-background p-4">
+											<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+												<div className="flex min-w-0 flex-col gap-2">
+													<div className="flex flex-wrap items-center gap-2">
+														<h3 className="truncate font-medium">
+															{instance.hostUrl}
+														</h3>
+														<Badge variant="outline">{instance.username}</Badge>
+													</div>
+													<div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+														<span>
+															Updated {formatDate(instance.updatedAt)}
+														</span>
+														<Badge
+															variant={
+																instance.hasApiKey ? "secondary" : "outline"
+															}
+														>
+															<ShieldCheckIcon data-icon="inline-start" />
+															{instance.hasApiKey
+																? "API key stored"
+																: "Missing API key"}
+														</Badge>
+													</div>
+												</div>
+
+												<div className="flex gap-2">
+													<Button
+														onClick={() => startEdit(instance)}
+														size="sm"
+														variant="outline"
+													>
+														<PencilLineIcon data-icon="inline-start" />
+														Edit
+													</Button>
+													<Button
+														onClick={() => handleDelete(instance.id)}
+														size="sm"
+														variant="ghost"
+														disabled={isDeleting === instance.id}
+													>
+														<Trash2Icon data-icon="inline-start" />
+														{isDeleting === instance.id
+															? "Removing..."
+															: "Delete"}
+													</Button>
+												</div>
+											</div>
+										</div>
+										{index < instances.length - 1 ? <Separator /> : null}
+									</div>
+								))
+							)}
 						</CardContent>
 					</Card>
 
 					<Card>
 						<CardHeader>
-							<CardTitle>Current stack</CardTitle>
+							<CardTitle>
+								{form.id ? "Edit instance" : "Add instance"}
+							</CardTitle>
 							<CardDescription>
-								These packages are now part of the UI layer and ready to use in
-								new screens.
+								Save a Jenkins base URL, username, and API key for later use.
 							</CardDescription>
 						</CardHeader>
-						<CardContent className="grid grid-cols-2 gap-3">
-							{stackItems.map((item) => (
-								<div
-									key={item}
-									className="rounded-xl border bg-muted/50 px-4 py-3 text-sm font-medium"
-								>
-									{item}
+						<form onSubmit={handleSubmit}>
+							<CardContent className="flex flex-col gap-5">
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="host-url">Host URL</Label>
+									<Input
+										id="host-url"
+										placeholder="https://jenkins.example.com"
+										value={form.hostUrl}
+										onChange={(event) =>
+											setForm((current) => ({
+												...current,
+												hostUrl: event.target.value,
+											}))
+										}
+									/>
 								</div>
-							))}
-						</CardContent>
-						<CardFooter className="justify-between">
-							<span className="text-sm text-muted-foreground">
-								Edit <code>src/mainview/App.tsx</code> to extend this screen.
-							</span>
-						</CardFooter>
+
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="username">Username</Label>
+									<Input
+										id="username"
+										placeholder="automation-user"
+										value={form.username}
+										onChange={(event) =>
+											setForm((current) => ({
+												...current,
+												username: event.target.value,
+											}))
+										}
+									/>
+								</div>
+
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="api-key">API key / token</Label>
+									<Textarea
+										id="api-key"
+										placeholder={
+											form.id
+												? "Leave empty to keep the stored API key"
+												: "Paste the Jenkins API key or token"
+										}
+										value={form.apiKey}
+										onChange={(event) =>
+											setForm((current) => ({
+												...current,
+												apiKey: event.target.value,
+											}))
+										}
+									/>
+									<p className="text-sm leading-6 text-muted-foreground">
+										The API key is written to the system credential manager and
+										not stored in the plain-text config file.
+									</p>
+								</div>
+							</CardContent>
+
+							<CardFooter className="justify-between gap-3">
+								<Button
+									type="button"
+									onClick={startCreate}
+									variant="ghost"
+									disabled={isSaving}
+								>
+									Clear
+								</Button>
+								<Button type="submit" disabled={isSaving}>
+									{isSaving ? (
+										<>
+											<LoaderCircleIcon
+												className="animate-spin"
+												data-icon="inline-start"
+											/>
+											Saving...
+										</>
+									) : (
+										<>
+											<ShieldCheckIcon data-icon="inline-start" />
+											{form.id ? "Save changes" : "Save instance"}
+										</>
+									)}
+								</Button>
+							</CardFooter>
+						</form>
 					</Card>
 				</section>
 			</div>
 		</div>
 	);
+}
+
+function formatDate(value: string): string {
+	return new Intl.DateTimeFormat(undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(new Date(value));
+}
+
+function getErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return "Something went wrong.";
 }
 
 export default App;
