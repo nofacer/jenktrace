@@ -1,0 +1,12 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9fde10ec3260ed50e837ccad72c12bae786980f2",
+  "prompts": {},
+  "humans": {
+    "h_bafa96d59b1234": {
+      "author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
