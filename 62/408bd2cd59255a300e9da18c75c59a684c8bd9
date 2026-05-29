@@ -1,0 +1,36 @@
+package.json
+  h_bafa96d59b1234 16-17
+src/mainview/App.tsx
+  s_8d6584d173edce::t_68f7451417cd3b 108,233-241,313,495,823-858
+  s_0a1367f653f1f2::t_397cedc2e734f1 463,465-482,491-492,494,496,499,501-506,508,518-519,963-969
+  s_0a1367f653f1f2::t_9dca3f8fce8c0a 2,483-490,493,497-498,500,507,510,513-514,516
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "62408bd2cd59255a300e9da18c75c59a684c8bd9",
+  "prompts": {},
+  "humans": {
+    "h_bafa96d59b1234": {
+      "author": "PosiNorth <nofacer@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_0a1367f653f1f2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e7425-06ad-7ef3-ac6b-d4729eb6d7a0",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    },
+    "s_8d6584d173edce": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e7433-bedc-7d21-8253-bec4f24d62df",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
