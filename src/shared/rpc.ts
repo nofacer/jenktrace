@@ -2,6 +2,8 @@ import type {
 	JenkinsConnectionTestInput,
 	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
+	JenkinsJobDetails,
+	JenkinsJobDetailsInput,
 	UpsertJenkinsInstanceInput,
 } from "./jenkins";
 
@@ -27,6 +29,10 @@ export type AppRPCSchema = {
 			testJenkinsConnection: {
 				params: JenkinsConnectionTestInput;
 				response: JenkinsConnectionTestResult;
+			};
+			getJenkinsJobDetails: {
+				params: JenkinsJobDetailsInput;
+				response: JenkinsJobDetails;
 			};
 		};
 		messages: EmptyRPCMap;

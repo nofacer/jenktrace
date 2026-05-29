@@ -26,6 +26,37 @@ export type JenkinsConnectionTestResult = {
 	jenkinsVersion?: string | null;
 };
 
+export type JenkinsJobDetailsInput = {
+	instanceId: JenkinsInstanceId;
+	fullProjectName: string;
+};
+
+export type JenkinsJobBuildSummary = {
+	number: number;
+	url: string;
+	result?: string | null;
+	building: boolean;
+	timestamp?: number;
+	duration?: number;
+	displayName?: string;
+};
+
+export type JenkinsJobDetails = {
+	fullProjectName: string;
+	displayName: string;
+	fullDisplayName: string;
+	url: string;
+	description?: string | null;
+	buildable: boolean;
+	inQueue: boolean;
+	color?: string | null;
+	nextBuildNumber?: number;
+	lastBuild?: JenkinsJobBuildSummary | null;
+	lastCompletedBuild?: JenkinsJobBuildSummary | null;
+	lastSuccessfulBuild?: JenkinsJobBuildSummary | null;
+	lastFailedBuild?: JenkinsJobBuildSummary | null;
+};
+
 export type UpsertJenkinsInstanceInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
@@ -34,11 +65,39 @@ export type UpsertJenkinsInstanceInput = {
 	apiKey?: string;
 };
 
+export function normalizeFullProjectName(value: string): string {
+	return value
+		.split("/")
+		.map((segment) => segment.trim())
+		.filter(Boolean)
+		.join("/");
+}
+
 export function normalizeJobNames(values: string[]): string[] {
 	return values
-		.map((value) => value.trim())
+		.map((value) => normalizeFullProjectName(value))
 		.filter(Boolean)
 		.filter((value, index, array) => array.indexOf(value) === index);
+}
+
+export function buildJenkinsJobPath(fullProjectName: string): string {
+	const normalized = normalizeFullProjectName(fullProjectName);
+
+	if (!normalized) {
+		throw new Error("Full project name is required.");
+	}
+
+	return `/job/${normalized
+		.split("/")
+		.map((segment) => encodeURIComponent(segment))
+		.join("/job/")}/`;
+}
+
+export function buildJenkinsJobUrl(
+	hostUrl: string,
+	fullProjectName: string,
+): string {
+	return `${normalizeHostUrl(hostUrl)}${buildJenkinsJobPath(fullProjectName)}`;
 }
 
 export function validateConnectionTestInput(
@@ -60,6 +119,26 @@ export function validateConnectionTestInput(
 		hostUrl,
 		username,
 		apiKey: input.apiKey?.trim(),
+	};
+}
+
+export function validateJobDetailsInput(
+	input: JenkinsJobDetailsInput,
+): JenkinsJobDetailsInput {
+	const instanceId = input.instanceId.trim();
+	const fullProjectName = normalizeFullProjectName(input.fullProjectName);
+
+	if (!instanceId) {
+		throw new Error("Instance ID is required.");
+	}
+
+	if (!fullProjectName) {
+		throw new Error("Full project name is required.");
+	}
+
+	return {
+		instanceId,
+		fullProjectName,
 	};
 }
 

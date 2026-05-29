@@ -5,13 +5,18 @@ import { join } from "node:path";
 import { Utils } from "electrobun/bun";
 
 import {
+	buildJenkinsJobUrl,
 	type JenkinsConnectionTestInput,
 	type JenkinsConnectionTestResult,
 	type JenkinsInstanceRecord,
 	type JenkinsInstanceSummary,
+	type JenkinsJobBuildSummary,
+	type JenkinsJobDetails,
+	type JenkinsJobDetailsInput,
 	type UpsertJenkinsInstanceInput,
 	validateConnectionTestInput,
 	validateInstanceInput,
+	validateJobDetailsInput,
 } from "../shared/jenkins";
 
 const CONFIG_DIR = join(Utils.paths.userData, "config");
@@ -101,6 +106,23 @@ async function loadApiKey(instanceId: string): Promise<string | null> {
 	} catch {
 		return null;
 	}
+}
+
+function buildAuthorizationHeader(username: string, apiKey: string): string {
+	return `Basic ${btoa(`${username}:${apiKey}`)}`;
+}
+
+async function fetchJsonWithAuth(
+	url: string,
+	username: string,
+	apiKey: string,
+): Promise<Response> {
+	return fetch(url, {
+		headers: {
+			Accept: "application/json",
+			Authorization: buildAuthorizationHeader(username, apiKey),
+		},
+	});
 }
 
 async function saveApiKey(instanceId: string, apiKey: string) {
@@ -229,6 +251,173 @@ export async function deleteJenkinsInstance(
 	return listJenkinsInstances();
 }
 
+type JenkinsBuildReference = {
+	number: number;
+	url: string;
+};
+
+type JenkinsBuildApiResponse = JenkinsBuildReference & {
+	result?: string | null;
+	building?: boolean;
+	timestamp?: number;
+	duration?: number;
+	displayName?: string;
+};
+
+type JenkinsJobApiResponse = {
+	displayName?: string;
+	fullDisplayName?: string;
+	url?: string;
+	description?: string | null;
+	buildable?: boolean;
+	inQueue?: boolean;
+	color?: string | null;
+	nextBuildNumber?: number;
+	lastBuild?: JenkinsBuildReference | null;
+	lastCompletedBuild?: JenkinsBuildReference | null;
+	lastSuccessfulBuild?: JenkinsBuildReference | null;
+	lastFailedBuild?: JenkinsBuildReference | null;
+};
+
+function toBuildSummary(
+	build?: JenkinsBuildApiResponse | null,
+): JenkinsJobBuildSummary | null {
+	if (!build) {
+		return null;
+	}
+
+	return {
+		number: build.number,
+		url: build.url,
+		result: build.result,
+		building: Boolean(build.building),
+		timestamp: build.timestamp,
+		duration: build.duration,
+		displayName: build.displayName,
+	};
+}
+
+async function resolveBuildSummary(
+	build: JenkinsBuildReference | null | undefined,
+	username: string,
+	apiKey: string,
+): Promise<JenkinsJobBuildSummary | null> {
+	if (!build) {
+		return null;
+	}
+
+	const response = await fetchJsonWithAuth(
+		`${build.url}api/json`,
+		username,
+		apiKey,
+	);
+
+	if (!response.ok) {
+		return {
+			number: build.number,
+			url: build.url,
+			building: false,
+		};
+	}
+
+	const payload = (await response.json()) as JenkinsBuildApiResponse;
+	return toBuildSummary(payload);
+}
+
+export async function getJenkinsJobDetails(
+	input: JenkinsJobDetailsInput,
+): Promise<JenkinsJobDetails> {
+	const normalized = validateJobDetailsInput(input);
+	const config = await readConfig();
+	const instance = config.instances.find(
+		(candidate) => candidate.id === normalized.instanceId,
+	);
+
+	if (!instance) {
+		throw new Error("Jenkins instance not found.");
+	}
+
+	const storedApiKey = await loadApiKey(instance.id);
+
+	if (!storedApiKey) {
+		throw new Error("No API key is saved for this instance.");
+	}
+
+	const jobUrl = buildJenkinsJobUrl(
+		instance.hostUrl,
+		normalized.fullProjectName,
+	);
+	let response: Response;
+
+	try {
+		response = await fetchJsonWithAuth(
+			`${jobUrl}api/json`,
+			instance.username,
+			storedApiKey,
+		);
+	} catch (error) {
+		throw new Error(
+			error instanceof Error
+				? `Unable to reach Jenkins: ${error.message}`
+				: "Unable to reach Jenkins.",
+		);
+	}
+
+	if (response.status === 401 || response.status === 403) {
+		throw new Error("Authentication failed. Check the saved API key.");
+	}
+
+	if (response.status === 404) {
+		throw new Error("Job not found on Jenkins.");
+	}
+
+	if (!response.ok) {
+		throw new Error(
+			`Jenkins responded with ${response.status} ${response.statusText}.`,
+		);
+	}
+
+	const payload = (await response.json()) as JenkinsJobApiResponse;
+	const [lastBuild, lastCompletedBuild, lastSuccessfulBuild, lastFailedBuild] =
+		await Promise.all([
+			resolveBuildSummary(payload.lastBuild, instance.username, storedApiKey),
+			resolveBuildSummary(
+				payload.lastCompletedBuild,
+				instance.username,
+				storedApiKey,
+			),
+			resolveBuildSummary(
+				payload.lastSuccessfulBuild,
+				instance.username,
+				storedApiKey,
+			),
+			resolveBuildSummary(
+				payload.lastFailedBuild,
+				instance.username,
+				storedApiKey,
+			),
+		]);
+
+	return {
+		fullProjectName: normalized.fullProjectName,
+		displayName: payload.displayName ?? normalized.fullProjectName,
+		fullDisplayName:
+			payload.fullDisplayName ??
+			payload.displayName ??
+			normalized.fullProjectName,
+		url: payload.url ?? jobUrl,
+		description: payload.description ?? null,
+		buildable: Boolean(payload.buildable),
+		inQueue: Boolean(payload.inQueue),
+		color: payload.color ?? null,
+		nextBuildNumber: payload.nextBuildNumber,
+		lastBuild,
+		lastCompletedBuild,
+		lastSuccessfulBuild,
+		lastFailedBuild,
+	};
+}
+
 export async function testJenkinsConnection(
 	input: JenkinsConnectionTestInput,
 ): Promise<JenkinsConnectionTestResult> {
@@ -245,14 +434,12 @@ export async function testJenkinsConnection(
 		);
 	}
 
-	const authorization = btoa(`${normalized.username}:${apiKey}`);
-
 	let response: Response;
 	try {
 		response = await fetch(`${normalized.hostUrl}/api/json`, {
 			headers: {
 				Accept: "application/json",
-				Authorization: `Basic ${authorization}`,
+				Authorization: buildAuthorizationHeader(normalized.username, apiKey),
 			},
 		});
 	} catch (error) {

@@ -1,0 +1,22 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Electrobun: Debug Main Process",
+			"type": "pwa-node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}",
+			"runtimeExecutable": "bun",
+			"runtimeArgs": ["run", "dev"],
+			"console": "integratedTerminal",
+			"skipFiles": ["<node_internals>/**"]
+		},
+		{
+			"name": "Electrobun: Run HMR Stack",
+			"type": "node-terminal",
+			"request": "launch",
+			"cwd": "${workspaceFolder}",
+			"command": "bun run dev:hmr"
+		}
+	]
+}
