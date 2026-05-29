@@ -1,0 +1,47 @@
+src/mainview/App.tsx
+  s_4d42a1bafa3cd1::t_d2d6771ea34aa4 21
+  s_4d42a1bafa3cd1::t_3f71e8a12f52a8 24-28,37-41,48-51,83-93,102,106,110-112,119,212-213,216,224-225,228-250,259-262,278,302,319-322,334-354,358-382,473-474,480-482,518-522,547,566-567,583-589,639-642,644-648,651-654,686,790-794,801,820,822,835,837,852,854,860,902,925,931-1001
+  s_4d42a1bafa3cd1::t_d2a483409b430e 105,120,123,165-210,383-408
+  s_4d42a1bafa3cd1::t_153b055a6a7b7d 107-109,113-117,355-357,475-479,568-570,581-582,643,926-930
+  s_4d42a1bafa3cd1::t_1535c414beaa34 685,1034
+  s_4d42a1bafa3cd1::t_e9b06604b01502 562,571-580,599-602,606,638,649-650,655-684,706-783
+  s_4d42a1bafa3cd1::t_87d4aefaaaa750 1020-1033,1035-1086
+src/bun/index.ts
+  s_4d42a1bafa3cd1::t_8ad59fcbed6480 4,10,49-50
+src/shared/jenkins.ts
+  s_4d42a1bafa3cd1::t_3b300b5721bae9 29-59,125-141
+  s_4d42a1bafa3cd1::t_7a0c6e6f6c9ac8 68-75,78,83-100
+src/bun/jenkins-store.ts
+  s_4d42a1bafa3cd1::t_4e470068a2db7f 8,13-15,111-114,116-127,254-308,310-352,354-380,400-404,408-420,442
+  s_4d42a1bafa3cd1::t_3a0725f56dd7a7 309,353
+  s_4d42a1bafa3cd1::t_1535c414beaa34 381-399,405-407
+  s_4d42a1bafa3cd1::t_8e09447fdc50b4 19,115
+src/shared/rpc.ts
+  s_4d42a1bafa3cd1::t_12eef5f84069cd 5-6,33-35
+.vscode/launch.json
+  s_0fa5bf5dc1f3e5::t_61e5970e88f6b9 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6bd8f1bb293051bd1e590925abebb73ea45cfb03",
+  "prompts": {},
+  "sessions": {
+    "s_0fa5bf5dc1f3e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e73e7-68e0-73c0-946e-fcda040b7397",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    },
+    "s_4d42a1bafa3cd1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e7413-8ffe-7d90-bd1b-24741a2debe8",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
