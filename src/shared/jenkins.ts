@@ -30,7 +30,7 @@ export type UpsertJenkinsInstanceInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
-	jobs: string[];
+	jobs?: string[];
 	apiKey?: string;
 };
 
@@ -77,7 +77,7 @@ export function validateInstanceInput(
 ): UpsertJenkinsInstanceInput {
 	const hostUrl = normalizeHostUrl(input.hostUrl);
 	const username = input.username.trim();
-	const jobs = normalizeJobNames(input.jobs);
+	const jobs = input.jobs ? normalizeJobNames(input.jobs) : undefined;
 
 	if (!hostUrl) {
 		throw new Error("Host URL is required.");

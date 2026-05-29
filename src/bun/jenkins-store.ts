@@ -171,14 +171,14 @@ export async function saveJenkinsInstance(
 					...config.instances[existingIndex],
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
-					jobs: normalized.jobs,
+					jobs: normalized.jobs ?? config.instances[existingIndex].jobs,
 					updatedAt: now,
 				}
 			: {
 					id: normalized.id ?? createId(),
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
-					jobs: normalized.jobs,
+					jobs: normalized.jobs ?? [],
 					createdAt: now,
 					updatedAt: now,
 				};

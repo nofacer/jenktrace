@@ -1,13 +1,5 @@
-import {
-	LoaderCircleIcon,
-	PencilLineIcon,
-	PlugZapIcon,
-	PlusIcon,
-	ServerCogIcon,
-	ShieldCheckIcon,
-	Trash2Icon,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+import { Dialog } from "@base-ui/react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,401 +7,478 @@ import {
 	Card,
 	CardContent,
 	CardDescription,
-	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+import { appRpc } from "@/lib/app-rpc";
+import { cn } from "@/lib/utils";
 import type {
 	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
-import { appRpc } from "./lib/app-rpc";
 
-type FormState = {
+type InstanceFormState = {
 	id?: string;
 	hostUrl: string;
 	username: string;
-	jobsText: string;
 	apiKey: string;
 };
 
-const emptyForm: FormState = {
+const EMPTY_FORM: InstanceFormState = {
 	hostUrl: "",
 	username: "",
-	jobsText: "",
 	apiKey: "",
 };
 
-function jobsToText(jobs: string[]): string {
-	return jobs.join("\n");
+function summarizeInstance(instance: JenkinsInstanceSummary): string {
+	try {
+		return new URL(instance.hostUrl).hostname.slice(0, 2).toUpperCase();
+	} catch {
+		return instance.hostUrl.slice(0, 2).toUpperCase();
+	}
 }
 
-function textToJobs(value: string): string[] {
-	return value
-		.split("\n")
-		.map((job) => job.trim())
-		.filter(Boolean);
+function getInstanceTitle(instance: JenkinsInstanceSummary): string {
+	try {
+		return new URL(instance.hostUrl).hostname;
+	} catch {
+		return instance.hostUrl;
+	}
 }
 
-function App() {
+function buildFormState(
+	instance?: JenkinsInstanceSummary | null,
+): InstanceFormState {
+	if (!instance) {
+		return EMPTY_FORM;
+	}
+
+	return {
+		id: instance.id,
+		hostUrl: instance.hostUrl,
+		username: instance.username,
+		apiKey: "",
+	};
+}
+
+export default function App() {
 	const [instances, setInstances] = useState<JenkinsInstanceSummary[]>([]);
-	const [form, setForm] = useState<FormState>(emptyForm);
-	const [isLoading, setIsLoading] = useState(true);
-	const [isSaving, setIsSaving] = useState(false);
-	const [isDeleting, setIsDeleting] = useState<string | null>(null);
-	const [isTesting, setIsTesting] = useState(false);
-	const [testingInstanceId, setTestingInstanceId] = useState<string | null>(
+	const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(
 		null,
 	);
-	const [error, setError] = useState<string | null>(null);
-	const [status, setStatus] = useState<string | null>(null);
+	const [selectedJob, setSelectedJob] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(true);
+	const [isSaving, setIsSaving] = useState(false);
+	const [isDeleting, setIsDeleting] = useState(false);
+	const [isTesting, setIsTesting] = useState(false);
+	const [isDialogOpen, setIsDialogOpen] = useState(false);
+	const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+	const [formState, setFormState] = useState<InstanceFormState>(EMPTY_FORM);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [testResult, setTestResult] =
 		useState<JenkinsConnectionTestResult | null>(null);
 
+	const selectedInstance = useMemo(
+		() =>
+			instances.find((instance) => instance.id === selectedInstanceId) ?? null,
+		[instances, selectedInstanceId],
+	);
+
 	useEffect(() => {
-		setIsLoading(true);
-		setError(null);
+		const run = async () => {
+			setIsLoading(true);
+			setErrorMessage(null);
 
-		void appRpc.request
-			.listJenkinsInstances()
-			.then((nextInstances) => {
+			try {
+				const nextInstances = await appRpc.proxy.request.listJenkinsInstances();
 				setInstances(nextInstances);
-			})
-			.catch((nextError) => {
-				setError(getErrorMessage(nextError));
-			})
-			.finally(() => {
+				setSelectedInstanceId(nextInstances[0]?.id ?? null);
+			} catch (error) {
+				setErrorMessage(
+					error instanceof Error ? error.message : "Failed to load instances.",
+				);
+			} finally {
 				setIsLoading(false);
-			});
-	}, []);
-
-	function startCreate() {
-		setForm(emptyForm);
-		setError(null);
-		setStatus(null);
-		setTestResult(null);
-	}
-
-	function startEdit(instance: JenkinsInstanceSummary) {
-		setForm({
-			id: instance.id,
-			hostUrl: instance.hostUrl,
-			username: instance.username,
-			jobsText: jobsToText(instance.jobs),
-			apiKey: "",
-		});
-		setError(null);
-		setStatus(
-			instance.hasApiKey
-				? "Leave API key empty to keep the stored secret unchanged."
-				: "This instance does not have an API key stored yet.",
-		);
-		setTestResult(null);
-	}
-
-	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		setIsSaving(true);
-		setError(null);
-		setStatus(null);
-		setTestResult(null);
-
-		const payload: UpsertJenkinsInstanceInput = {
-			id: form.id,
-			hostUrl: form.hostUrl,
-			username: form.username,
-			jobs: textToJobs(form.jobsText),
-			apiKey: form.apiKey,
+			}
 		};
 
-		if (!payload.id && !payload.apiKey?.trim()) {
-			setError("An API key is required when adding a new instance.");
-			setIsSaving(false);
+		void run();
+	}, []);
+
+	useEffect(() => {
+		if (!selectedInstance) {
+			setSelectedJob(null);
 			return;
 		}
 
+		setSelectedJob((currentJob) =>
+			currentJob && selectedInstance.jobs.includes(currentJob)
+				? currentJob
+				: (selectedInstance.jobs[0] ?? null),
+		);
+	}, [selectedInstance]);
+
+	function openCreateDialog() {
+		setDialogMode("create");
+		setFormState(EMPTY_FORM);
+		setTestResult(null);
+		setErrorMessage(null);
+		setIsDialogOpen(true);
+	}
+
+	function openEditDialog() {
+		if (!selectedInstance) {
+			return;
+		}
+
+		setDialogMode("edit");
+		setFormState(buildFormState(selectedInstance));
+		setTestResult(null);
+		setErrorMessage(null);
+		setIsDialogOpen(true);
+	}
+
+	async function handleSave() {
+		setIsSaving(true);
+		setErrorMessage(null);
+
 		try {
-			const nextInstances = await appRpc.request.saveJenkinsInstance(payload);
+			const payload: UpsertJenkinsInstanceInput = {
+				id: formState.id,
+				hostUrl: formState.hostUrl,
+				username: formState.username,
+				apiKey: formState.apiKey || undefined,
+			};
+
+			const nextInstances =
+				await appRpc.proxy.request.saveJenkinsInstance(payload);
+			const savedId =
+				payload.id ??
+				nextInstances.find(
+					(instance) =>
+						instance.hostUrl === payload.hostUrl &&
+						instance.username === payload.username,
+				)?.id ??
+				null;
+
 			setInstances(nextInstances);
-			setForm(emptyForm);
-			setStatus(
-				payload.id
-					? "Instance updated. API key is stored in the system credential manager."
-					: "Instance added. API key is stored in the system credential manager.",
+			setSelectedInstanceId(savedId);
+			setIsDialogOpen(false);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error ? error.message : "Failed to save instance.",
 			);
-			setTestResult(null);
-		} catch (nextError) {
-			setError(getErrorMessage(nextError));
 		} finally {
 			setIsSaving(false);
 		}
 	}
 
-	async function handleDelete(instanceId: string) {
-		setIsDeleting(instanceId);
-		setError(null);
-		setStatus(null);
-		setTestResult(null);
-
-		try {
-			const nextInstances = await appRpc.request.deleteJenkinsInstance({
-				id: instanceId,
-			});
-			setInstances(nextInstances);
-			if (form.id === instanceId) {
-				setForm(emptyForm);
-			}
-			setStatus("Instance removed.");
-		} catch (nextError) {
-			setError(getErrorMessage(nextError));
-		} finally {
-			setIsDeleting(null);
-		}
-	}
-
-	async function handleTestCurrentForm() {
-		setIsTesting(true);
-		setError(null);
-		setStatus(null);
-		setTestResult(null);
-
-		if (!form.hostUrl.trim() || !form.username.trim()) {
-			setError("Host URL and username are required before testing.");
-			setIsTesting(false);
+	async function handleDelete() {
+		if (!selectedInstance) {
 			return;
 		}
 
+		setIsDeleting(true);
+		setErrorMessage(null);
+
 		try {
-			const result = await appRpc.request.testJenkinsConnection({
-				id: form.id,
-				hostUrl: form.hostUrl,
-				username: form.username,
-				apiKey: form.apiKey,
+			const nextInstances = await appRpc.proxy.request.deleteJenkinsInstance({
+				id: selectedInstance.id,
 			});
-			setTestResult(result);
-		} catch (nextError) {
-			setError(getErrorMessage(nextError));
+			setInstances(nextInstances);
+			setSelectedInstanceId(nextInstances[0]?.id ?? null);
+			setIsDialogOpen(false);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error ? error.message : "Failed to delete instance.",
+			);
 		} finally {
-			setIsTesting(false);
+			setIsDeleting(false);
 		}
 	}
 
-	async function handleTestSavedInstance(instance: JenkinsInstanceSummary) {
-		setTestingInstanceId(instance.id);
-		setError(null);
-		setStatus(null);
+	async function handleTestConnection() {
+		setIsTesting(true);
+		setErrorMessage(null);
 		setTestResult(null);
 
 		try {
-			const result = await appRpc.request.testJenkinsConnection({
-				id: instance.id,
-				hostUrl: instance.hostUrl,
-				username: instance.username,
+			const result = await appRpc.proxy.request.testJenkinsConnection({
+				id: formState.id,
+				hostUrl: formState.hostUrl,
+				username: formState.username,
+				apiKey: formState.apiKey || undefined,
 			});
 			setTestResult(result);
-		} catch (nextError) {
-			setError(getErrorMessage(nextError));
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error ? error.message : "Failed to test connection.",
+			);
 		} finally {
-			setTestingInstanceId(null);
+			setIsTesting(false);
 		}
 	}
 
 	return (
-		<div className="theme min-h-screen bg-background">
-			<div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-8 lg:px-10">
-				<section className="flex flex-col gap-4 rounded-[2rem] border bg-card p-8 shadow-sm">
-					<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-						<div className="flex max-w-3xl flex-col gap-3">
-							<Badge variant="secondary">
-								<ServerCogIcon data-icon="inline-start" />
-								Jenkins Instances
-							</Badge>
-							<div className="flex flex-col gap-2">
-								<h1 className="font-heading text-4xl leading-tight font-medium tracking-tight">
-									Manage multiple Jenkins connections locally.
-								</h1>
-								<p className="max-w-2xl text-base leading-7 text-muted-foreground">
-									Each instance stores host URL and username in app config,
-									while the API key is kept in the system credential manager.
-								</p>
-							</div>
+		<div className="flex h-screen bg-background text-foreground">
+			<aside className="flex w-22 flex-col items-center gap-3 border-r bg-muted/30 px-3 py-4">
+				<Button
+					size="icon-sm"
+					onClick={openCreateDialog}
+					title="Create instance"
+				>
+					+
+				</Button>
+
+				<Separator />
+
+				<div className="flex flex-1 flex-col items-center gap-2 overflow-y-auto pb-2">
+					{instances.map((instance) => {
+						const isActive = instance.id === selectedInstanceId;
+
+						return (
+							<button
+								type="button"
+								key={instance.id}
+								title={getInstanceTitle(instance)}
+								onClick={() => setSelectedInstanceId(instance.id)}
+								className={cn(
+									"flex size-12 items-center justify-center rounded-xl border text-xs font-semibold transition-colors",
+									isActive
+										? "border-primary bg-primary text-primary-foreground"
+										: "border-border bg-background hover:bg-accent hover:text-accent-foreground",
+								)}
+							>
+								{summarizeInstance(instance)}
+							</button>
+						);
+					})}
+				</div>
+
+				<Separator />
+
+				<Button
+					size="icon-sm"
+					variant="outline"
+					disabled={!selectedInstance}
+					onClick={openEditDialog}
+					title="Edit selected instance"
+				>
+					E
+				</Button>
+			</aside>
+
+			<section className="flex min-w-0 flex-1">
+				<div className="flex w-80 shrink-0 flex-col border-r bg-background">
+					<div className="flex items-center justify-between px-5 py-4">
+						<div>
+							<p className="text-sm font-medium">Jobs</p>
+							<p className="text-xs text-muted-foreground">
+								{selectedInstance
+									? getInstanceTitle(selectedInstance)
+									: "Select an instance"}
+							</p>
 						</div>
-						<Button onClick={startCreate} variant="outline">
-							<PlusIcon data-icon="inline-start" />
-							Add instance
-						</Button>
+						{selectedInstance ? (
+							<Badge variant="outline">{selectedInstance.jobs.length}</Badge>
+						) : null}
 					</div>
 
-					{status ? (
-						<div className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm">
-							{status}
-						</div>
-					) : null}
+					<Separator />
 
-					{error ? (
-						<div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-							{error}
-						</div>
-					) : null}
-
-					{testResult ? (
-						<div
-							className={`rounded-xl border px-4 py-3 text-sm ${
-								testResult.ok
-									? "border-border bg-muted/50"
-									: "border-destructive/20 bg-destructive/10 text-destructive"
-							}`}
-						>
-							<div>{testResult.message}</div>
-							{testResult.jenkinsVersion ? (
-								<div className="mt-1 text-xs opacity-80">
-									Jenkins version: {testResult.jenkinsVersion}
-								</div>
-							) : null}
-						</div>
-					) : null}
-				</section>
-
-				<section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-					<Card>
-						<CardHeader>
-							<CardTitle>Saved instances</CardTitle>
-							<CardDescription>
-								Edit an existing Jenkins connection or add a new one.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="flex flex-col gap-4">
-							{isLoading ? (
-								<div className="flex items-center gap-3 rounded-xl border bg-muted/50 px-4 py-6 text-sm text-muted-foreground">
-									<LoaderCircleIcon className="animate-spin" />
+					<div className="flex-1 overflow-y-auto p-3">
+						{isLoading ? (
+							<Card size="sm">
+								<CardContent className="py-2 text-muted-foreground">
 									Loading instances...
+								</CardContent>
+							</Card>
+						) : null}
+
+						{!isLoading && !selectedInstance ? (
+							<Card>
+								<CardHeader>
+									<CardTitle>No instance selected</CardTitle>
+									<CardDescription>
+										Pick an instance from the left rail or create a new one.
+									</CardDescription>
+								</CardHeader>
+							</Card>
+						) : null}
+
+						{!isLoading &&
+						selectedInstance &&
+						selectedInstance.jobs.length === 0 ? (
+							<Card>
+								<CardHeader>
+									<CardTitle>No jobs configured</CardTitle>
+									<CardDescription>
+										This instance does not have any jobs assigned yet.
+									</CardDescription>
+								</CardHeader>
+							</Card>
+						) : null}
+
+						{!isLoading &&
+						selectedInstance &&
+						selectedInstance.jobs.length > 0 ? (
+							<div className="flex flex-col gap-2">
+								{selectedInstance.jobs.map((job) => {
+									const isActive = job === selectedJob;
+
+									return (
+										<button
+											type="button"
+											key={job}
+											onClick={() => setSelectedJob(job)}
+											className={cn(
+												"rounded-xl border px-4 py-3 text-left transition-colors",
+												isActive
+													? "border-primary bg-primary/8"
+													: "border-border bg-card hover:bg-accent/60",
+											)}
+										>
+											<p className="truncate text-sm font-medium">{job}</p>
+											<p className="mt-1 text-xs text-muted-foreground">
+												{selectedInstance.username}
+											</p>
+										</button>
+									);
+								})}
+							</div>
+						) : null}
+					</div>
+				</div>
+
+				<div className="flex min-w-0 flex-1 flex-col bg-muted/10">
+					<div className="flex items-center justify-between px-6 py-5">
+						<div>
+							<h1 className="text-lg font-semibold">Details</h1>
+							<p className="text-sm text-muted-foreground">
+								This panel is reserved for richer job and build details.
+							</p>
+						</div>
+						{selectedInstance ? (
+							<Button variant="outline" size="sm" onClick={openEditDialog}>
+								Edit instance
+							</Button>
+						) : null}
+					</div>
+
+					<Separator />
+
+					<div className="flex-1 p-6">
+						<Card className="h-full min-h-0">
+							<CardHeader>
+								<CardTitle>
+									{selectedJob ?? selectedInstance?.hostUrl ?? "No selection"}
+								</CardTitle>
+								<CardDescription>
+									{selectedJob
+										? "This area is ready for build logs, status, and job actions."
+										: selectedInstance
+											? "Choose a job from the middle column to inspect it here."
+											: "Select an instance on the left to start browsing jobs."}
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="flex h-full flex-col justify-between gap-6">
+								<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+									<InfoTile
+										label="Instance"
+										value={
+											selectedInstance
+												? getInstanceTitle(selectedInstance)
+												: "Not selected"
+										}
+									/>
+									<InfoTile
+										label="Username"
+										value={selectedInstance?.username ?? "Not selected"}
+									/>
+									<InfoTile
+										label="API key"
+										value={
+											selectedInstance
+												? selectedInstance.hasApiKey
+													? "Saved in keychain"
+													: "Not saved"
+												: "Not selected"
+										}
+									/>
+									<InfoTile
+										label="Selected job"
+										value={selectedJob ?? "None"}
+									/>
+									<InfoTile
+										label="Total jobs"
+										value={
+											selectedInstance
+												? String(selectedInstance.jobs.length)
+												: "0"
+										}
+									/>
+									<InfoTile
+										label="Last updated"
+										value={
+											selectedInstance
+												? new Date(selectedInstance.updatedAt).toLocaleString()
+												: "Not selected"
+										}
+									/>
 								</div>
-							) : instances.length === 0 ? (
-								<div className="rounded-2xl border border-dashed bg-muted/40 px-5 py-8 text-sm text-muted-foreground">
-									No Jenkins instances saved yet. Add your first instance to get
-									started.
+
+								<div className="rounded-2xl border border-dashed bg-background/70 p-6">
+									<p className="text-sm font-medium">Next step area</p>
+									<p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+										The wide right panel stays intentionally open so we can add
+										job status, build history, logs, and actions without
+										compressing the navigation columns.
+									</p>
 								</div>
-							) : (
-								instances.map((instance, index) => (
-									<div key={instance.id} className="flex flex-col gap-4">
-										<div className="flex flex-col gap-4 rounded-2xl border bg-background p-4">
-											<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-												<div className="flex min-w-0 flex-col gap-2">
-													<div className="flex flex-wrap items-center gap-2">
-														<h3 className="truncate font-medium">
-															{instance.hostUrl}
-														</h3>
-														<Badge variant="outline">{instance.username}</Badge>
-													</div>
-													<div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-														<span>
-															Updated {formatDate(instance.updatedAt)}
-														</span>
-														<Badge variant="outline">
-															{instance.jobs.length} job
-															{instance.jobs.length === 1 ? "" : "s"}
-														</Badge>
-														<Badge
-															variant={
-																instance.hasApiKey ? "secondary" : "outline"
-															}
-														>
-															<ShieldCheckIcon data-icon="inline-start" />
-															{instance.hasApiKey
-																? "API key stored"
-																: "Missing API key"}
-														</Badge>
-													</div>
-												</div>
+							</CardContent>
+						</Card>
+					</div>
+				</div>
+			</section>
 
-												{instance.jobs.length > 0 ? (
-													<div className="flex flex-col gap-2 rounded-xl bg-muted/40 px-3 py-3">
-														<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-															Monitored jobs
-														</span>
-														<div className="flex flex-wrap gap-2">
-															{instance.jobs.map((job) => (
-																<Badge key={job} variant="secondary">
-																	{job}
-																</Badge>
-															))}
-														</div>
-													</div>
-												) : (
-													<div className="rounded-xl bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
-														No jobs configured yet.
-													</div>
-												)}
+			<Dialog.Root open={isDialogOpen} onOpenChange={setIsDialogOpen} modal>
+				<Dialog.Portal>
+					<Dialog.Backdrop className="fixed inset-0 bg-black/35 backdrop-blur-sm" />
+					<Dialog.Popup className="fixed top-1/2 left-1/2 w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-background shadow-2xl outline-none">
+						<div className="flex items-center justify-between border-b px-6 py-4">
+							<div>
+								<Dialog.Title className="text-base font-semibold">
+									{dialogMode === "create"
+										? "Create Jenkins instance"
+										: "Edit Jenkins instance"}
+								</Dialog.Title>
+								<Dialog.Description className="mt-1 text-sm text-muted-foreground">
+									Manage only the Jenkins connection information here.
+								</Dialog.Description>
+							</div>
+							<Dialog.Close className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground">
+								Close
+							</Dialog.Close>
+						</div>
 
-												<div className="flex gap-2">
-													<Button
-														onClick={() => startEdit(instance)}
-														size="sm"
-														variant="outline"
-													>
-														<PencilLineIcon data-icon="inline-start" />
-														Edit
-													</Button>
-													<Button
-														onClick={() => handleTestSavedInstance(instance)}
-														size="sm"
-														variant="outline"
-														disabled={testingInstanceId === instance.id}
-													>
-														<PlugZapIcon data-icon="inline-start" />
-														{testingInstanceId === instance.id
-															? "Testing..."
-															: "Test"}
-													</Button>
-													<Button
-														onClick={() => handleDelete(instance.id)}
-														size="sm"
-														variant="ghost"
-														disabled={isDeleting === instance.id}
-													>
-														<Trash2Icon data-icon="inline-start" />
-														{isDeleting === instance.id
-															? "Removing..."
-															: "Delete"}
-													</Button>
-												</div>
-											</div>
-										</div>
-										{index < instances.length - 1 ? <Separator /> : null}
-									</div>
-								))
-							)}
-						</CardContent>
-					</Card>
-
-					<Card>
-						<CardHeader>
-							<CardTitle>
-								{form.id ? "Edit instance" : "Add instance"}
-							</CardTitle>
-							<CardDescription>
-								Save a Jenkins base URL, username, and API key for later use.
-							</CardDescription>
-						</CardHeader>
-						<form onSubmit={handleSubmit}>
-							<CardContent className="flex flex-col gap-5">
+						<div className="flex flex-col gap-5 px-6 py-5">
+							<div className="grid gap-4 md:grid-cols-2">
 								<div className="flex flex-col gap-2">
-									<Label htmlFor="host-url">Host URL</Label>
+									<Label htmlFor="hostUrl">Host URL</Label>
 									<Input
-										id="host-url"
-										placeholder="https://jenkins.example.com"
-										value={form.hostUrl}
+										id="hostUrl"
+										value={formState.hostUrl}
 										onChange={(event) =>
-											setForm((current) => ({
+											setFormState((current) => ({
 												...current,
 												hostUrl: event.target.value,
 											}))
 										}
+										placeholder="https://jenkins.example.com"
 									/>
 								</div>
 
@@ -417,123 +486,107 @@ function App() {
 									<Label htmlFor="username">Username</Label>
 									<Input
 										id="username"
-										placeholder="automation-user"
-										value={form.username}
+										value={formState.username}
 										onChange={(event) =>
-											setForm((current) => ({
+											setFormState((current) => ({
 												...current,
 												username: event.target.value,
 											}))
 										}
+										placeholder="automation-bot"
 									/>
 								</div>
+							</div>
 
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="api-key">API key / token</Label>
-									<Textarea
-										id="api-key"
-										placeholder={
-											form.id
-												? "Leave empty to keep the stored API key"
-												: "Paste the Jenkins API key or token"
-										}
-										value={form.apiKey}
-										onChange={(event) =>
-											setForm((current) => ({
-												...current,
-												apiKey: event.target.value,
-											}))
-										}
-									/>
-									<p className="text-sm leading-6 text-muted-foreground">
-										The API key is written to the system credential manager and
-										not stored in the plain-text config file.
-									</p>
-								</div>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="apiKey">API key</Label>
+								<Input
+									id="apiKey"
+									type="password"
+									value={formState.apiKey}
+									onChange={(event) =>
+										setFormState((current) => ({
+											...current,
+											apiKey: event.target.value,
+										}))
+									}
+									placeholder={
+										dialogMode === "edit"
+											? "Leave blank to keep the saved key"
+											: "Paste Jenkins API key"
+									}
+								/>
+							</div>
 
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="job-names">Jobs to monitor</Label>
-									<Textarea
-										id="job-names"
-										placeholder={[
-											"folder-a/project-alpha",
-											"folder-b/service-beta/deploy",
-											"team-x/build-pipeline",
-										].join("\n")}
-										value={form.jobsText}
-										onChange={(event) =>
-											setForm((current) => ({
-												...current,
-												jobsText: event.target.value,
-											}))
-										}
-									/>
-									<p className="text-sm leading-6 text-muted-foreground">
-										Enter one Jenkins job full project name per line. This step
-										only stores the list and does not implement job handling
-										yet.
-									</p>
+							{errorMessage ? (
+								<div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+									{errorMessage}
 								</div>
-							</CardContent>
+							) : null}
 
-							<CardFooter className="justify-between gap-3">
-								<div className="flex gap-3">
-									<Button
-										type="button"
-										onClick={startCreate}
-										variant="ghost"
-										disabled={isSaving || isTesting}
-									>
-										Clear
-									</Button>
-									<Button
-										type="button"
-										onClick={handleTestCurrentForm}
-										variant="outline"
-										disabled={isSaving || isTesting}
-									>
-										<PlugZapIcon data-icon="inline-start" />
-										{isTesting ? "Testing..." : "Test connection"}
-									</Button>
-								</div>
-								<Button type="submit" disabled={isSaving || isTesting}>
-									{isSaving ? (
-										<>
-											<LoaderCircleIcon
-												className="animate-spin"
-												data-icon="inline-start"
-											/>
-											Saving...
-										</>
-									) : (
-										<>
-											<ShieldCheckIcon data-icon="inline-start" />
-											{form.id ? "Save changes" : "Save instance"}
-										</>
+							{testResult ? (
+								<div
+									className={cn(
+										"rounded-xl border px-4 py-3 text-sm",
+										testResult.ok
+											? "border-green-600/25 bg-green-600/10 text-green-700"
+											: "border-destructive/30 bg-destructive/10 text-destructive",
 									)}
+								>
+									<p>{testResult.message}</p>
+									{testResult.jenkinsVersion ? (
+										<p className="mt-1 text-xs opacity-80">
+											Jenkins {testResult.jenkinsVersion}
+										</p>
+									) : null}
+								</div>
+							) : null}
+						</div>
+
+						<div className="flex items-center justify-between border-t px-6 py-4">
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									onClick={handleTestConnection}
+									disabled={isTesting || isSaving}
+								>
+									{isTesting ? "Testing..." : "Test connection"}
 								</Button>
-							</CardFooter>
-						</form>
-					</Card>
-				</section>
-			</div>
+
+								{dialogMode === "edit" ? (
+									<Button
+										variant="destructive"
+										onClick={handleDelete}
+										disabled={isDeleting || isSaving}
+									>
+										{isDeleting ? "Deleting..." : "Delete"}
+									</Button>
+								) : null}
+							</div>
+
+							<div className="flex items-center gap-2">
+								<Dialog.Close className="inline-flex">
+									<Button variant="ghost">Cancel</Button>
+								</Dialog.Close>
+								<Button onClick={handleSave} disabled={isSaving || isDeleting}>
+									{isSaving ? "Saving..." : "Save"}
+								</Button>
+							</div>
+						</div>
+					</Dialog.Popup>
+				</Dialog.Portal>
+			</Dialog.Root>
 		</div>
 	);
 }
 
-function formatDate(value: string): string {
-	return new Intl.DateTimeFormat(undefined, {
-		dateStyle: "medium",
-		timeStyle: "short",
-	}).format(new Date(value));
+function InfoTile({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="rounded-2xl border bg-background p-4">
+			<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+				{label}
+			</p>
+			<p className="mt-2 truncate text-sm font-medium">{value}</p>
+		</div>
+	);
 }
-
-function getErrorMessage(error: unknown): string {
-	if (error instanceof Error) {
-		return error.message;
-	}
-
-	return "Something went wrong.";
-}
-
-export default App;
