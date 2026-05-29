@@ -1,4 +1,5 @@
 import { Dialog } from "@base-ui/react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +105,7 @@ export default function App() {
 	const [isTesting, setIsTesting] = useState(false);
 	const [isLoadingJobDetails, setIsLoadingJobDetails] = useState(false);
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = useState(false);
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 	const [instanceDialogMode, setInstanceDialogMode] = useState<
 		"create" | "edit"
 	>("create");
@@ -228,6 +230,15 @@ export default function App() {
 		setIsInstanceDialogOpen(true);
 	}
 
+	function openDeleteDialog() {
+		if (!selectedInstance || isDeleting) {
+			return;
+		}
+
+		setErrorMessage(null);
+		setIsDeleteDialogOpen(true);
+	}
+
 	function openCreateJobDialog() {
 		if (!selectedInstance) {
 			return;
@@ -299,6 +310,7 @@ export default function App() {
 			});
 			setInstances(nextInstances);
 			setSelectedInstanceId(nextInstances[0]?.id ?? null);
+			setIsDeleteDialogOpen(false);
 			setIsInstanceDialogOpen(false);
 		} catch (error) {
 			setErrorMessage(
@@ -444,43 +456,67 @@ export default function App() {
 						);
 					})}
 				</div>
-
-				<Separator />
-
-				<Button
-					size="icon-sm"
-					variant="outline"
-					disabled={!selectedInstance}
-					onClick={openEditDialog}
-					title="Edit selected instance"
-				>
-					E
-				</Button>
 			</aside>
 
 			<section className="flex min-w-0 flex-1">
 				<div className="flex w-80 shrink-0 flex-col border-r bg-background">
-					<div className="flex items-center justify-between px-5 py-4">
-						<div>
-							<p className="text-sm font-medium">Jobs</p>
-							<p className="text-xs text-muted-foreground">
-								{selectedInstance
-									? getInstanceTitle(selectedInstance)
-									: "Select an instance"}
-							</p>
-						</div>
+					<div className="flex flex-col gap-3 px-5 py-4">
 						{selectedInstance ? (
-							<div className="flex items-center gap-2">
-								<Badge variant="outline">{selectedInstance.jobs.length}</Badge>
-								<Button
-									size="sm"
-									variant="outline"
-									onClick={openCreateJobDialog}
-								>
-									Add job
-								</Button>
+							<div className="rounded-2xl border bg-muted/30 p-4">
+								<div className="flex items-start justify-between gap-3">
+									<div className="min-w-0">
+										<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+											Instance
+										</p>
+										<p className="mt-2 truncate text-sm font-semibold">
+											{getInstanceTitle(selectedInstance)}
+										</p>
+										<p className="mt-1 truncate text-xs text-muted-foreground">
+											{selectedInstance.username}
+										</p>
+									</div>
+									<Badge variant="outline">
+										{selectedInstance.jobs.length} jobs
+									</Badge>
+								</div>
+								<div className="mt-3 flex items-center gap-2">
+									<Button
+										size="icon-sm"
+										variant="outline"
+										onClick={openEditDialog}
+										title="Edit instance"
+										aria-label="Edit instance"
+									>
+										<Pencil />
+									</Button>
+									<Button
+										size="icon-sm"
+										variant="destructive"
+										onClick={openDeleteDialog}
+										disabled={isDeleting}
+										title={isDeleting ? "Deleting instance" : "Delete instance"}
+										aria-label="Delete instance"
+									>
+										<Trash2 />
+									</Button>
+								</div>
 							</div>
 						) : null}
+
+						<div className="flex items-center justify-between">
+							<p className="text-sm font-medium">Jobs</p>
+							{selectedInstance ? (
+								<Button
+									size="icon-sm"
+									variant="outline"
+									onClick={openCreateJobDialog}
+									title="Add job"
+									aria-label="Add job"
+								>
+									<Plus />
+								</Button>
+							) : null}
+						</div>
 					</div>
 
 					<Separator />
@@ -583,9 +619,6 @@ export default function App() {
 										Edit job
 									</Button>
 								) : null}
-								<Button variant="outline" size="sm" onClick={openEditDialog}>
-									Edit instance
-								</Button>
 							</div>
 						) : null}
 					</div>
@@ -788,6 +821,43 @@ export default function App() {
 			</section>
 
 			<Dialog.Root
+				open={isDeleteDialogOpen}
+				onOpenChange={setIsDeleteDialogOpen}
+				modal
+			>
+				<Dialog.Portal>
+					<Dialog.Backdrop className="fixed inset-0 bg-black/35 backdrop-blur-sm" />
+					<Dialog.Popup className="fixed top-1/2 left-1/2 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-background shadow-2xl outline-none">
+						<div className="border-b px-6 py-4">
+							<Dialog.Title className="text-base font-semibold">
+								Delete Jenkins instance
+							</Dialog.Title>
+							<Dialog.Description className="mt-1 text-sm text-muted-foreground">
+								{selectedInstance
+									? `Delete "${getInstanceTitle(selectedInstance)}"? This also removes its saved jobs and API key reference.`
+									: "Delete the selected Jenkins instance."}
+							</Dialog.Description>
+						</div>
+
+						<div className="flex items-center justify-end gap-2 border-t px-6 py-4">
+							<Dialog.Close className="inline-flex">
+								<Button variant="ghost" disabled={isDeleting}>
+									Cancel
+								</Button>
+							</Dialog.Close>
+							<Button
+								variant="destructive"
+								onClick={handleDelete}
+								disabled={isDeleting || !selectedInstance}
+							>
+								{isDeleting ? "Deleting..." : "Delete instance"}
+							</Button>
+						</div>
+					</Dialog.Popup>
+				</Dialog.Portal>
+			</Dialog.Root>
+
+			<Dialog.Root
 				open={isInstanceDialogOpen}
 				onOpenChange={setIsInstanceDialogOpen}
 				modal
@@ -890,25 +960,13 @@ export default function App() {
 						</div>
 
 						<div className="flex items-center justify-between border-t px-6 py-4">
-							<div className="flex items-center gap-2">
-								<Button
-									variant="outline"
-									onClick={handleTestConnection}
-									disabled={isTesting || isSaving}
-								>
-									{isTesting ? "Testing..." : "Test connection"}
-								</Button>
-
-								{instanceDialogMode === "edit" ? (
-									<Button
-										variant="destructive"
-										onClick={handleDelete}
-										disabled={isDeleting || isSaving}
-									>
-										{isDeleting ? "Deleting..." : "Delete"}
-									</Button>
-								) : null}
-							</div>
+							<Button
+								variant="outline"
+								onClick={handleTestConnection}
+								disabled={isTesting || isSaving}
+							>
+								{isTesting ? "Testing..." : "Test connection"}
+							</Button>
 
 							<div className="flex items-center gap-2">
 								<Dialog.Close className="inline-flex">
