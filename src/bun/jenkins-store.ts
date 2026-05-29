@@ -5,9 +5,12 @@ import { join } from "node:path";
 import { Utils } from "electrobun/bun";
 
 import {
+	type JenkinsConnectionTestInput,
+	type JenkinsConnectionTestResult,
 	type JenkinsInstanceRecord,
 	type JenkinsInstanceSummary,
 	type UpsertJenkinsInstanceInput,
+	validateConnectionTestInput,
 	validateInstanceInput,
 } from "../shared/jenkins";
 
@@ -35,7 +38,12 @@ async function readConfig(): Promise<StoredConfig> {
 	const raw = await readFile(CONFIG_PATH, "utf8");
 	const parsed = JSON.parse(raw) as Partial<StoredConfig>;
 	return {
-		instances: Array.isArray(parsed.instances) ? parsed.instances : [],
+		instances: Array.isArray(parsed.instances)
+			? parsed.instances.map((instance) => ({
+					...instance,
+					jobs: Array.isArray(instance.jobs) ? instance.jobs : [],
+				}))
+			: [],
 	};
 }
 
@@ -77,6 +85,21 @@ async function keychainItemExists(instanceId: string): Promise<boolean> {
 		return true;
 	} catch {
 		return false;
+	}
+}
+
+async function loadApiKey(instanceId: string): Promise<string | null> {
+	try {
+		return await runSecurityCommand([
+			"find-generic-password",
+			"-a",
+			instanceId,
+			"-s",
+			keychainServiceName(instanceId),
+			"-w",
+		]);
+	} catch {
+		return null;
 	}
 }
 
@@ -148,12 +171,14 @@ export async function saveJenkinsInstance(
 					...config.instances[existingIndex],
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
+					jobs: normalized.jobs,
 					updatedAt: now,
 				}
 			: {
 					id: normalized.id ?? createId(),
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
+					jobs: normalized.jobs,
 					createdAt: now,
 					updatedAt: now,
 				};
@@ -202,4 +227,61 @@ export async function deleteJenkinsInstance(
 	await deleteApiKey(instanceId);
 
 	return listJenkinsInstances();
+}
+
+export async function testJenkinsConnection(
+	input: JenkinsConnectionTestInput,
+): Promise<JenkinsConnectionTestResult> {
+	const normalized = validateConnectionTestInput(input);
+	const storedApiKey =
+		normalized.id && !normalized.apiKey
+			? await loadApiKey(normalized.id)
+			: null;
+	const apiKey = normalized.apiKey || storedApiKey;
+
+	if (!apiKey) {
+		throw new Error(
+			"No API key is available. Provide one in the form or save the instance first.",
+		);
+	}
+
+	const authorization = btoa(`${normalized.username}:${apiKey}`);
+
+	let response: Response;
+	try {
+		response = await fetch(`${normalized.hostUrl}/api/json`, {
+			headers: {
+				Accept: "application/json",
+				Authorization: `Basic ${authorization}`,
+			},
+		});
+	} catch (error) {
+		throw new Error(
+			error instanceof Error
+				? `Unable to reach Jenkins: ${error.message}`
+				: "Unable to reach Jenkins.",
+		);
+	}
+
+	if (response.status === 401 || response.status === 403) {
+		return {
+			ok: false,
+			message: "Authentication failed. Check username and API key.",
+			jenkinsVersion: response.headers.get("x-jenkins"),
+		};
+	}
+
+	if (!response.ok) {
+		return {
+			ok: false,
+			message: `Jenkins responded with ${response.status} ${response.statusText}.`,
+			jenkinsVersion: response.headers.get("x-jenkins"),
+		};
+	}
+
+	return {
+		ok: true,
+		message: "Connection succeeded.",
+		jenkinsVersion: response.headers.get("x-jenkins"),
+	};
 }

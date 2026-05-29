@@ -1,6 +1,7 @@
 import {
 	LoaderCircleIcon,
 	PencilLineIcon,
+	PlugZapIcon,
 	PlusIcon,
 	ServerCogIcon,
 	ShieldCheckIcon,
@@ -23,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import type {
+	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
@@ -32,14 +34,27 @@ type FormState = {
 	id?: string;
 	hostUrl: string;
 	username: string;
+	jobsText: string;
 	apiKey: string;
 };
 
 const emptyForm: FormState = {
 	hostUrl: "",
 	username: "",
+	jobsText: "",
 	apiKey: "",
 };
+
+function jobsToText(jobs: string[]): string {
+	return jobs.join("\n");
+}
+
+function textToJobs(value: string): string[] {
+	return value
+		.split("\n")
+		.map((job) => job.trim())
+		.filter(Boolean);
+}
 
 function App() {
 	const [instances, setInstances] = useState<JenkinsInstanceSummary[]>([]);
@@ -47,8 +62,14 @@ function App() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSaving, setIsSaving] = useState(false);
 	const [isDeleting, setIsDeleting] = useState<string | null>(null);
+	const [isTesting, setIsTesting] = useState(false);
+	const [testingInstanceId, setTestingInstanceId] = useState<string | null>(
+		null,
+	);
 	const [error, setError] = useState<string | null>(null);
 	const [status, setStatus] = useState<string | null>(null);
+	const [testResult, setTestResult] =
+		useState<JenkinsConnectionTestResult | null>(null);
 
 	useEffect(() => {
 		setIsLoading(true);
@@ -71,6 +92,7 @@ function App() {
 		setForm(emptyForm);
 		setError(null);
 		setStatus(null);
+		setTestResult(null);
 	}
 
 	function startEdit(instance: JenkinsInstanceSummary) {
@@ -78,6 +100,7 @@ function App() {
 			id: instance.id,
 			hostUrl: instance.hostUrl,
 			username: instance.username,
+			jobsText: jobsToText(instance.jobs),
 			apiKey: "",
 		});
 		setError(null);
@@ -86,6 +109,7 @@ function App() {
 				? "Leave API key empty to keep the stored secret unchanged."
 				: "This instance does not have an API key stored yet.",
 		);
+		setTestResult(null);
 	}
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -93,11 +117,13 @@ function App() {
 		setIsSaving(true);
 		setError(null);
 		setStatus(null);
+		setTestResult(null);
 
 		const payload: UpsertJenkinsInstanceInput = {
 			id: form.id,
 			hostUrl: form.hostUrl,
 			username: form.username,
+			jobs: textToJobs(form.jobsText),
 			apiKey: form.apiKey,
 		};
 
@@ -116,6 +142,7 @@ function App() {
 					? "Instance updated. API key is stored in the system credential manager."
 					: "Instance added. API key is stored in the system credential manager.",
 			);
+			setTestResult(null);
 		} catch (nextError) {
 			setError(getErrorMessage(nextError));
 		} finally {
@@ -127,6 +154,7 @@ function App() {
 		setIsDeleting(instanceId);
 		setError(null);
 		setStatus(null);
+		setTestResult(null);
 
 		try {
 			const nextInstances = await appRpc.request.deleteJenkinsInstance({
@@ -141,6 +169,53 @@ function App() {
 			setError(getErrorMessage(nextError));
 		} finally {
 			setIsDeleting(null);
+		}
+	}
+
+	async function handleTestCurrentForm() {
+		setIsTesting(true);
+		setError(null);
+		setStatus(null);
+		setTestResult(null);
+
+		if (!form.hostUrl.trim() || !form.username.trim()) {
+			setError("Host URL and username are required before testing.");
+			setIsTesting(false);
+			return;
+		}
+
+		try {
+			const result = await appRpc.request.testJenkinsConnection({
+				id: form.id,
+				hostUrl: form.hostUrl,
+				username: form.username,
+				apiKey: form.apiKey,
+			});
+			setTestResult(result);
+		} catch (nextError) {
+			setError(getErrorMessage(nextError));
+		} finally {
+			setIsTesting(false);
+		}
+	}
+
+	async function handleTestSavedInstance(instance: JenkinsInstanceSummary) {
+		setTestingInstanceId(instance.id);
+		setError(null);
+		setStatus(null);
+		setTestResult(null);
+
+		try {
+			const result = await appRpc.request.testJenkinsConnection({
+				id: instance.id,
+				hostUrl: instance.hostUrl,
+				username: instance.username,
+			});
+			setTestResult(result);
+		} catch (nextError) {
+			setError(getErrorMessage(nextError));
+		} finally {
+			setTestingInstanceId(null);
 		}
 	}
 
@@ -181,6 +256,23 @@ function App() {
 							{error}
 						</div>
 					) : null}
+
+					{testResult ? (
+						<div
+							className={`rounded-xl border px-4 py-3 text-sm ${
+								testResult.ok
+									? "border-border bg-muted/50"
+									: "border-destructive/20 bg-destructive/10 text-destructive"
+							}`}
+						>
+							<div>{testResult.message}</div>
+							{testResult.jenkinsVersion ? (
+								<div className="mt-1 text-xs opacity-80">
+									Jenkins version: {testResult.jenkinsVersion}
+								</div>
+							) : null}
+						</div>
+					) : null}
 				</section>
 
 				<section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -218,6 +310,10 @@ function App() {
 														<span>
 															Updated {formatDate(instance.updatedAt)}
 														</span>
+														<Badge variant="outline">
+															{instance.jobs.length} job
+															{instance.jobs.length === 1 ? "" : "s"}
+														</Badge>
 														<Badge
 															variant={
 																instance.hasApiKey ? "secondary" : "outline"
@@ -231,6 +327,25 @@ function App() {
 													</div>
 												</div>
 
+												{instance.jobs.length > 0 ? (
+													<div className="flex flex-col gap-2 rounded-xl bg-muted/40 px-3 py-3">
+														<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+															Monitored jobs
+														</span>
+														<div className="flex flex-wrap gap-2">
+															{instance.jobs.map((job) => (
+																<Badge key={job} variant="secondary">
+																	{job}
+																</Badge>
+															))}
+														</div>
+													</div>
+												) : (
+													<div className="rounded-xl bg-muted/40 px-3 py-3 text-sm text-muted-foreground">
+														No jobs configured yet.
+													</div>
+												)}
+
 												<div className="flex gap-2">
 													<Button
 														onClick={() => startEdit(instance)}
@@ -239,6 +354,17 @@ function App() {
 													>
 														<PencilLineIcon data-icon="inline-start" />
 														Edit
+													</Button>
+													<Button
+														onClick={() => handleTestSavedInstance(instance)}
+														size="sm"
+														variant="outline"
+														disabled={testingInstanceId === instance.id}
+													>
+														<PlugZapIcon data-icon="inline-start" />
+														{testingInstanceId === instance.id
+															? "Testing..."
+															: "Test"}
 													</Button>
 													<Button
 														onClick={() => handleDelete(instance.id)}
@@ -324,18 +450,53 @@ function App() {
 										not stored in the plain-text config file.
 									</p>
 								</div>
+
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="job-names">Jobs to monitor</Label>
+									<Textarea
+										id="job-names"
+										placeholder={[
+											"folder-a/project-alpha",
+											"folder-b/service-beta/deploy",
+											"team-x/build-pipeline",
+										].join("\n")}
+										value={form.jobsText}
+										onChange={(event) =>
+											setForm((current) => ({
+												...current,
+												jobsText: event.target.value,
+											}))
+										}
+									/>
+									<p className="text-sm leading-6 text-muted-foreground">
+										Enter one Jenkins job full project name per line. This step
+										only stores the list and does not implement job handling
+										yet.
+									</p>
+								</div>
 							</CardContent>
 
 							<CardFooter className="justify-between gap-3">
-								<Button
-									type="button"
-									onClick={startCreate}
-									variant="ghost"
-									disabled={isSaving}
-								>
-									Clear
-								</Button>
-								<Button type="submit" disabled={isSaving}>
+								<div className="flex gap-3">
+									<Button
+										type="button"
+										onClick={startCreate}
+										variant="ghost"
+										disabled={isSaving || isTesting}
+									>
+										Clear
+									</Button>
+									<Button
+										type="button"
+										onClick={handleTestCurrentForm}
+										variant="outline"
+										disabled={isSaving || isTesting}
+									>
+										<PlugZapIcon data-icon="inline-start" />
+										{isTesting ? "Testing..." : "Test connection"}
+									</Button>
+								</div>
+								<Button type="submit" disabled={isSaving || isTesting}>
 									{isSaving ? (
 										<>
 											<LoaderCircleIcon

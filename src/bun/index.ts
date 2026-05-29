@@ -1,10 +1,14 @@
 import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
-import type { UpsertJenkinsInstanceInput } from "../shared/jenkins";
+import type {
+	JenkinsConnectionTestInput,
+	UpsertJenkinsInstanceInput,
+} from "../shared/jenkins";
 import type { AppRPCSchema } from "../shared/rpc";
 import {
 	deleteJenkinsInstance,
 	listJenkinsInstances,
 	saveJenkinsInstance,
+	testJenkinsConnection,
 } from "./jenkins-store";
 
 const DEV_SERVER_PORT = 5173;
@@ -38,6 +42,8 @@ const appRpc = BrowserView.defineRPC<AppRPCSchema>({
 				saveJenkinsInstance(params),
 			deleteJenkinsInstance: ({ id }: { id: string }) =>
 				deleteJenkinsInstance(id),
+			testJenkinsConnection: (params: JenkinsConnectionTestInput) =>
+				testJenkinsConnection(params),
 		},
 	},
 });
