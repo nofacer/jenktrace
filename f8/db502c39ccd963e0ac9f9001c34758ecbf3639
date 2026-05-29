@@ -1,0 +1,34 @@
+src/shared/jenkins.ts
+  s_bfcc3192102398::t_003f09c9ca649d 16-28,42-63
+  s_bfcc3192102398::t_b32f09f0488568 7,33,37-41,64-65,80,94
+src/bun/index.ts
+  s_bfcc3192102398::t_1f05e79362b33a 2-5,11,45-46
+src/shared/rpc.ts
+  s_bfcc3192102398::t_2b9eaa5c217729 2-3,27-29
+src/bun/jenkins-store.ts
+  s_bfcc3192102398::t_4963740daeb263 41-46,174,181
+  s_bfcc3192102398::t_ee65fc0e494078 8-9,13,91-105,231-286
+src/mainview/App.tsx
+  s_bfcc3192102398::t_335d5afbb3e965 37,44,48-58,103,126,453-457,463-472
+  s_bfcc3192102398::t_375b5fc0cf285e 181-186
+  s_bfcc3192102398::t_20f239beafe085 4,27,65,67-68,95,112,120,145,157,175-180,187-221,259-273,358-367,480-499
+  s_bfcc3192102398::t_6192eebfecf465 458-462,473-474
+  s_bfcc3192102398::t_b9f29cd0fab0ad 66,71-72
+  s_bfcc3192102398::t_1446fbddadb3b6 313-316,330-347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f8db502c39ccd963e0ac9f9001c34758ecbf3639",
+  "prompts": {},
+  "sessions": {
+    "s_bfcc3192102398": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e6ebf-5e84-7ae3-b247-8a5f0daa48f2",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
