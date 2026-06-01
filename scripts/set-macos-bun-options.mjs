@@ -1,14 +1,49 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const wrapperBundlePath = process.env.ELECTROBUN_WRAPPER_BUNDLE_PATH;
-
-if (!wrapperBundlePath || process.platform !== "darwin") {
+if (process.platform !== "darwin") {
 	process.exit(0);
 }
 
-const infoPlistPath = join(wrapperBundlePath, "Contents", "Info.plist");
+async function resolveBundlePath() {
+	const wrapperBundlePath = process.env.ELECTROBUN_WRAPPER_BUNDLE_PATH;
+	if (wrapperBundlePath) {
+		return wrapperBundlePath;
+	}
+
+	const buildDir = process.env.ELECTROBUN_BUILD_DIR;
+	if (!buildDir) {
+		return null;
+	}
+
+	const entries = await readdir(buildDir, { withFileTypes: true });
+	const appBundles = entries.filter(
+		(entry) => entry.isDirectory() && entry.name.endsWith(".app"),
+	);
+
+	if (appBundles.length === 1) {
+		return join(buildDir, appBundles[0].name);
+	}
+
+	if (appBundles.length === 0) {
+		throw new Error(`No .app bundle found in build directory: ${buildDir}`);
+	}
+
+	throw new Error(
+		`Expected one .app bundle in build directory, found ${appBundles.length}: ${appBundles
+			.map((bundle) => bundle.name)
+			.join(", ")}`,
+	);
+}
+
+const bundlePath = await resolveBundlePath();
+
+if (!bundlePath) {
+	process.exit(0);
+}
+
+const infoPlistPath = join(bundlePath, "Contents", "Info.plist");
 
 if (!existsSync(infoPlistPath)) {
 	throw new Error(`Info.plist not found: ${infoPlistPath}`);
