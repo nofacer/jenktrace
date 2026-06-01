@@ -1,4 +1,6 @@
 import type {
+	JenkinsBuildLogInput,
+	JenkinsBuildLogRecord,
 	JenkinsConnectionTestInput,
 	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
@@ -45,6 +47,10 @@ export type AppRPCSchema = {
 			getJenkinsJobAnalytics: {
 				params: JenkinsJobAnalyticsInput;
 				response: JenkinsJobAnalytics;
+			};
+			getJenkinsBuildLog: {
+				params: JenkinsBuildLogInput;
+				response: JenkinsBuildLogRecord | null;
 			};
 			runJenkinsMonitoringCycle: {
 				params: undefined;

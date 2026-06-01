@@ -6,6 +6,7 @@ import {
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
+import { useState } from "react";
 import {
 	Area,
 	AreaChart,
@@ -18,6 +19,7 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
@@ -31,11 +33,20 @@ import {
 	ChartTooltip,
 	ChartTooltipContent,
 } from "@/components/ui/chart";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { appRpc } from "@/lib/app-rpc";
 import { cn } from "@/lib/utils";
 import type {
+	JenkinsBuildLogRecord,
 	JenkinsBuildTimeRange,
 	JenkinsInstanceSummary,
 	JenkinsJobActivity,
@@ -107,6 +118,11 @@ export function DetailsPanel({
 	onEditJob: () => void;
 	onDeleteJob: () => void;
 }) {
+	const [selectedBuildLog, setSelectedBuildLog] =
+		useState<JenkinsBuildLogRecord | null>(null);
+	const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
+	const [isLoadingBuildLog, setIsLoadingBuildLog] = useState(false);
+	const [buildLogError, setBuildLogError] = useState<string | null>(null);
 	const buildRows = jobAnalytics?.builds ?? [];
 	const bucketRows =
 		jobAnalytics?.buckets.map((bucket) => ({
@@ -116,6 +132,34 @@ export function DetailsPanel({
 					? null
 					: Math.round(bucket.successRate * 100),
 		})) ?? [];
+
+	async function handleOpenBuildLog(build: JenkinsJobBuildRecord) {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
+
+		setIsLogDialogOpen(true);
+		setIsLoadingBuildLog(true);
+		setBuildLogError(null);
+
+		try {
+			const nextLog = await appRpc.proxy.request.getJenkinsBuildLog({
+				instanceId: selectedInstance.id,
+				fullProjectName: selectedJob,
+				buildNumber: build.number,
+			});
+			setSelectedBuildLog(nextLog);
+		} catch (error) {
+			setSelectedBuildLog(null);
+			setBuildLogError(
+				error instanceof Error
+					? error.message
+					: "Failed to load local build log.",
+			);
+		} finally {
+			setIsLoadingBuildLog(false);
+		}
+	}
 
 	return (
 		<div className="flex min-w-0 flex-1 flex-col bg-muted/10">
@@ -405,6 +449,13 @@ export function DetailsPanel({
 													<Badge variant="outline">
 														{formatDuration(build.duration)}
 													</Badge>
+													<Button
+														size="sm"
+														variant="outline"
+														onClick={() => void handleOpenBuildLog(build)}
+													>
+														View log
+													</Button>
 												</div>
 											</div>
 										))
@@ -419,6 +470,39 @@ export function DetailsPanel({
 					) : null}
 				</div>
 			</div>
+
+			<Dialog open={isLogDialogOpen} onOpenChange={setIsLogDialogOpen}>
+				<DialogContent className="sm:max-w-[56rem]">
+					<DialogHeader className="pr-8">
+						<DialogTitle>
+							{selectedBuildLog
+								? `Build #${selectedBuildLog.buildNumber} log`
+								: "Build log"}
+						</DialogTitle>
+						<DialogDescription>
+							Locally persisted build log content.
+						</DialogDescription>
+					</DialogHeader>
+
+					{buildLogError ? (
+						<Alert variant="destructive">
+							<AlertTitle>Unable to load build log</AlertTitle>
+							<AlertDescription>{buildLogError}</AlertDescription>
+						</Alert>
+					) : null}
+
+					{isLoadingBuildLog ? (
+						<Skeleton className="h-80 w-full rounded-xl" />
+					) : (
+						<div className="max-h-[65vh] overflow-auto rounded-xl border bg-muted/20 p-4">
+							<pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">
+								{selectedBuildLog?.content?.trim() ||
+									"No local build log found."}
+							</pre>
+						</div>
+					)}
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

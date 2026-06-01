@@ -17,6 +17,8 @@ export type JobFormState = {
 	fullProjectName: string;
 	retentionDays: string;
 	maxBuilds: string;
+	prefetchFailureLogs: boolean;
+	prefetchSuccessLogs: boolean;
 };
 
 export type InstanceDialogMode = "create" | "edit";
@@ -34,6 +36,8 @@ export const EMPTY_JOB_FORM: JobFormState = {
 	fullProjectName: "",
 	retentionDays: "90",
 	maxBuilds: "1000",
+	prefetchFailureLogs: true,
+	prefetchSuccessLogs: false,
 };
 
 export function buildFormState(
@@ -57,6 +61,7 @@ export function buildJobFormState(
 	job?: string | null,
 	retentionDays?: number,
 	maxBuilds?: number,
+	prefetchStatuses: Array<"failure" | "success"> = ["failure"],
 ): JobFormState {
 	if (!job) {
 		return EMPTY_JOB_FORM;
@@ -67,6 +72,8 @@ export function buildJobFormState(
 		fullProjectName: job,
 		retentionDays: String(retentionDays ?? 90),
 		maxBuilds: String(maxBuilds ?? 1000),
+		prefetchFailureLogs: prefetchStatuses.includes("failure"),
+		prefetchSuccessLogs: prefetchStatuses.includes("success"),
 	};
 }
 

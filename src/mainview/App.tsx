@@ -241,6 +241,9 @@ export default function App() {
 				selectedJob,
 				selectedInstance.jobRetentionDays[selectedJob],
 				selectedInstance.jobMaxBuilds[selectedJob],
+				selectedInstance.jobPrefetchBuildLogStatuses[selectedJob] ?? [
+					"failure",
+				],
 			),
 		);
 		setJobErrorMessage(null);
@@ -379,14 +382,31 @@ export default function App() {
 			const nextMaxBuilds = {
 				...selectedInstance.jobMaxBuilds,
 			};
+			const nextPrefetchBuildLogStatuses = {
+				...selectedInstance.jobPrefetchBuildLogStatuses,
+			};
+			const nextPrefetchStatuses: Array<"failure" | "success"> = [];
+
+			if (jobFormState.prefetchFailureLogs) {
+				nextPrefetchStatuses.push("failure" as const);
+			}
+
+			if (jobFormState.prefetchSuccessLogs) {
+				nextPrefetchStatuses.push("success" as const);
+			}
 
 			if (previousName && previousName !== nextName) {
 				delete nextRetentionDays[previousName];
 				delete nextMaxBuilds[previousName];
+				delete nextPrefetchBuildLogStatuses[previousName];
 			}
 
 			nextRetentionDays[nextName] = retentionDays;
 			nextMaxBuilds[nextName] = maxBuilds;
+			nextPrefetchBuildLogStatuses[nextName] =
+				nextPrefetchStatuses.length > 0
+					? nextPrefetchStatuses
+					: (["failure"] as const);
 
 			const nextInstances = await appRpc.proxy.request.saveJenkinsInstance({
 				id: selectedInstance.id,
@@ -395,6 +415,7 @@ export default function App() {
 				jobs: nextJobs,
 				jobRetentionDays: nextRetentionDays,
 				jobMaxBuilds: nextMaxBuilds,
+				jobPrefetchBuildLogStatuses: nextPrefetchBuildLogStatuses,
 			});
 
 			setInstances(nextInstances);
@@ -473,8 +494,12 @@ export default function App() {
 		const nextJobs = selectedInstance.jobs.filter((job) => job !== selectedJob);
 		const nextRetentionDays = { ...selectedInstance.jobRetentionDays };
 		const nextMaxBuilds = { ...selectedInstance.jobMaxBuilds };
+		const nextPrefetchBuildLogStatuses = {
+			...selectedInstance.jobPrefetchBuildLogStatuses,
+		};
 		delete nextRetentionDays[selectedJob];
 		delete nextMaxBuilds[selectedJob];
+		delete nextPrefetchBuildLogStatuses[selectedJob];
 		const nextSelectedJob =
 			nextJobs[currentJobIndex] ?? nextJobs[currentJobIndex - 1] ?? null;
 
@@ -486,6 +511,7 @@ export default function App() {
 				jobs: nextJobs,
 				jobRetentionDays: nextRetentionDays,
 				jobMaxBuilds: nextMaxBuilds,
+				jobPrefetchBuildLogStatuses: nextPrefetchBuildLogStatuses,
 			});
 
 			setInstances(nextInstances);

@@ -7,6 +7,8 @@ import { Utils } from "electrobun/bun";
 
 import {
 	buildJenkinsJobUrl,
+	type JenkinsBuildLogInput,
+	type JenkinsBuildLogRecord,
 	type JenkinsConnectionTestInput,
 	type JenkinsConnectionTestResult,
 	type JenkinsInstanceRecord,
@@ -26,10 +28,12 @@ import {
 	normalizeBuildTimeRange,
 	normalizeJobMaxBuilds,
 	normalizeJobMaxBuildsValue,
+	normalizeJobPrefetchBuildLogStatuses,
 	normalizeJobRetentionDays,
 	normalizeJobRetentionDaysValue,
 	normalizePollIntervalMinutes,
 	type UpsertJenkinsInstanceInput,
+	validateBuildLogInput,
 	validateConnectionTestInput,
 	validateInstanceInput,
 	validateJobActivityInput,
@@ -96,6 +100,14 @@ type RuntimeBuildRow = {
 	timestamp: number | null;
 	duration: number | null;
 	display_name: string | null;
+	updated_at: string;
+};
+
+type RuntimeBuildLogRow = {
+	instance_id: string;
+	full_project_name: string;
+	build_number: number;
+	content: string;
 	updated_at: string;
 };
 
@@ -172,6 +184,14 @@ runtimeDb.exec(`
 	);
 	CREATE INDEX IF NOT EXISTS idx_job_runtime_build_lookup
 		ON job_runtime_build (instance_id, full_project_name, timestamp DESC, build_number DESC);
+	CREATE TABLE IF NOT EXISTS job_runtime_build_log (
+		instance_id TEXT NOT NULL,
+		full_project_name TEXT NOT NULL,
+		build_number INTEGER NOT NULL,
+		content TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		PRIMARY KEY (instance_id, full_project_name, build_number)
+	);
 `);
 
 const selectSnapshotStatement = runtimeDb.query<
@@ -267,6 +287,20 @@ const selectBuildsSinceStatement = runtimeDb.query<
 	ORDER BY COALESCE(timestamp, 0) DESC, build_number DESC
 `);
 
+const selectBuildLogStatement = runtimeDb.query<
+	RuntimeBuildLogRow,
+	[string, string, number]
+>(`
+	SELECT
+		instance_id,
+		full_project_name,
+		build_number,
+		content,
+		updated_at
+	FROM job_runtime_build_log
+	WHERE instance_id = ? AND full_project_name = ? AND build_number = ?
+`);
+
 function keychainServiceName(instanceId: string): string {
 	return `${KEYCHAIN_SERVICE_PREFIX}.${instanceId}`;
 }
@@ -337,6 +371,16 @@ function mapBuildRow(row: RuntimeBuildRow): JenkinsJobBuildRecord {
 			building: Boolean(row.building),
 			result: row.result,
 		}),
+	};
+}
+
+function mapBuildLogRow(row: RuntimeBuildLogRow): JenkinsBuildLogRecord {
+	return {
+		instanceId: row.instance_id,
+		fullProjectName: row.full_project_name,
+		buildNumber: row.build_number,
+		content: row.content,
+		updatedAt: row.updated_at,
 	};
 }
 
@@ -494,6 +538,28 @@ function persistBuilds(
 			],
 		);
 	}
+}
+
+function persistBuildLog(
+	instanceId: string,
+	fullProjectName: string,
+	buildNumber: number,
+	content: string,
+	updatedAt: string,
+) {
+	runtimeDb.run(
+		`INSERT INTO job_runtime_build_log (
+			instance_id,
+			full_project_name,
+			build_number,
+			content,
+			updated_at
+		) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(instance_id, full_project_name, build_number) DO UPDATE SET
+			content = excluded.content,
+			updated_at = excluded.updated_at`,
+		[instanceId, fullProjectName, buildNumber, content, updatedAt],
+	);
 }
 
 function pruneBuildsForJob(
@@ -676,6 +742,10 @@ function deleteJobRuntimeData(instanceId: string, fullProjectName: string) {
 		"DELETE FROM job_runtime_build WHERE instance_id = ? AND full_project_name = ?",
 		[instanceId, fullProjectName],
 	);
+	runtimeDb.run(
+		"DELETE FROM job_runtime_build_log WHERE instance_id = ? AND full_project_name = ?",
+		[instanceId, fullProjectName],
+	);
 }
 
 function deleteInstanceRuntimeData(instanceId: string) {
@@ -689,6 +759,9 @@ function deleteInstanceRuntimeData(instanceId: string) {
 		instanceId,
 	]);
 	runtimeDb.run("DELETE FROM job_runtime_build WHERE instance_id = ?", [
+		instanceId,
+	]);
+	runtimeDb.run("DELETE FROM job_runtime_build_log WHERE instance_id = ?", [
 		instanceId,
 	]);
 }
@@ -716,6 +789,18 @@ async function readConfig(): Promise<StoredConfig> {
 					jobMaxBuilds: normalizeJobMaxBuilds(
 						instance.jobMaxBuilds,
 						Array.isArray(instance.jobs) ? instance.jobs : [],
+					),
+					jobPrefetchBuildLogStatuses: normalizeJobPrefetchBuildLogStatuses(
+						instance.jobPrefetchBuildLogStatuses,
+						Array.isArray(instance.jobs) ? instance.jobs : [],
+					),
+					jobPrefetchFailedLogs: Object.fromEntries(
+						Object.entries(
+							normalizeJobPrefetchBuildLogStatuses(
+								instance.jobPrefetchBuildLogStatuses,
+								Array.isArray(instance.jobs) ? instance.jobs : [],
+							),
+						).map(([job, statuses]) => [job, statuses.includes("failure")]),
 					),
 					monitoringEnabled: instance.monitoringEnabled ?? true,
 					pollIntervalMinutes: normalizePollIntervalMinutes(
@@ -901,6 +986,9 @@ export async function saveJenkinsInstance(
 					jobMaxBuilds:
 						normalized.jobMaxBuilds ??
 						config.instances[existingIndex].jobMaxBuilds,
+					jobPrefetchBuildLogStatuses:
+						normalized.jobPrefetchBuildLogStatuses ??
+						config.instances[existingIndex].jobPrefetchBuildLogStatuses,
 					monitoringEnabled:
 						normalized.monitoringEnabled ??
 						config.instances[existingIndex].monitoringEnabled,
@@ -920,6 +1008,12 @@ export async function saveJenkinsInstance(
 					jobMaxBuilds:
 						normalized.jobMaxBuilds ??
 						normalizeJobMaxBuilds(undefined, normalized.jobs ?? []),
+					jobPrefetchBuildLogStatuses:
+						normalized.jobPrefetchBuildLogStatuses ??
+						normalizeJobPrefetchBuildLogStatuses(
+							undefined,
+							normalized.jobs ?? [],
+						),
 					monitoringEnabled: normalized.monitoringEnabled ?? true,
 					pollIntervalMinutes:
 						normalized.pollIntervalMinutes ?? normalizePollIntervalMinutes(),
@@ -1264,6 +1358,73 @@ async function resolveBuildSummary(
 	return toBuildSummary(payload);
 }
 
+async function fetchBuildLogForInstance(params: {
+	instance: JenkinsInstanceRecord;
+	buildNumber: number;
+	fullProjectName: string;
+	buildUrl?: string;
+}): Promise<JenkinsBuildLogRecord> {
+	const storedApiKey = await loadApiKey(params.instance.id);
+
+	if (!storedApiKey) {
+		throw new Error("No API key is saved for this instance.");
+	}
+
+	const buildUrl =
+		params.buildUrl ??
+		`${buildJenkinsJobUrl(params.instance.hostUrl, params.fullProjectName)}${params.buildNumber}/`;
+	let response: Response;
+
+	try {
+		response = await fetch(`${buildUrl}consoleText`, {
+			headers: {
+				Authorization: buildAuthorizationHeader(
+					params.instance.username,
+					storedApiKey,
+				),
+			},
+		});
+	} catch (error) {
+		throw new Error(
+			error instanceof Error
+				? `Unable to reach Jenkins: ${error.message}`
+				: "Unable to reach Jenkins.",
+		);
+	}
+
+	if (response.status === 401 || response.status === 403) {
+		throw new Error("Authentication failed. Check the saved API key.");
+	}
+
+	if (response.status === 404) {
+		throw new Error("Build log not found on Jenkins.");
+	}
+
+	if (!response.ok) {
+		throw new Error(
+			`Jenkins responded with ${response.status} ${response.statusText}.`,
+		);
+	}
+
+	const content = await response.text();
+	const updatedAt = new Date().toISOString();
+	persistBuildLog(
+		params.instance.id,
+		params.fullProjectName,
+		params.buildNumber,
+		content,
+		updatedAt,
+	);
+
+	return {
+		instanceId: params.instance.id,
+		fullProjectName: params.fullProjectName,
+		buildNumber: params.buildNumber,
+		content,
+		updatedAt,
+	};
+}
+
 async function fetchJobDetailsForInstance(
 	instance: JenkinsInstanceRecord,
 	fullProjectName: string,
@@ -1515,6 +1676,41 @@ export async function getJenkinsJobAnalytics(
 	});
 }
 
+export async function getJenkinsBuildLog(
+	input: JenkinsBuildLogInput,
+): Promise<JenkinsBuildLogRecord | null> {
+	const normalized = validateBuildLogInput(input);
+	const existing = selectBuildLogStatement.get(
+		normalized.instanceId,
+		normalized.fullProjectName,
+		normalized.buildNumber,
+	);
+
+	if (existing) {
+		return mapBuildLogRow(existing);
+	}
+
+	const config = await readConfig();
+	const instance = config.instances.find(
+		(candidate) => candidate.id === normalized.instanceId,
+	);
+
+	if (!instance) {
+		throw new Error("Jenkins instance not found.");
+	}
+
+	const buildRow = selectBuildsSinceStatement
+		.all(normalized.instanceId, normalized.fullProjectName, 0)
+		.find((row) => row.build_number === normalized.buildNumber);
+
+	return fetchBuildLogForInstance({
+		instance,
+		fullProjectName: normalized.fullProjectName,
+		buildNumber: normalized.buildNumber,
+		buildUrl: buildRow?.url,
+	});
+}
+
 export async function runJenkinsMonitoringCycle(): Promise<{
 	processedJobs: number;
 	observedChanges: number;
@@ -1554,6 +1750,61 @@ export async function runJenkinsMonitoringCycle(): Promise<{
 					details.builds ?? [],
 					observedAt,
 				);
+				const prefetchStatuses = instance.jobPrefetchBuildLogStatuses[
+					fullProjectName
+				] ?? ["failure"];
+				if (prefetchStatuses.length > 0) {
+					const candidateBuilds = (details.builds ?? []).filter((build) => {
+						if (
+							prefetchStatuses.includes("failure") &&
+							build.resultCategory === "failed"
+						) {
+							return true;
+						}
+
+						if (
+							prefetchStatuses.includes("success") &&
+							build.resultCategory === "success"
+						) {
+							return true;
+						}
+
+						return false;
+					});
+
+					for (const build of candidateBuilds) {
+						const existingLog = selectBuildLogStatement.get(
+							instance.id,
+							fullProjectName,
+							build.number,
+						);
+
+						if (existingLog) {
+							continue;
+						}
+
+						try {
+							await fetchBuildLogForInstance({
+								instance,
+								fullProjectName,
+								buildNumber: build.number,
+								buildUrl: build.url,
+							});
+						} catch (error) {
+							writeLog({
+								instanceId: instance.id,
+								fullProjectName,
+								level: "warn",
+								code: "build_log_prefetch_failed",
+								message:
+									error instanceof Error
+										? error.message
+										: "Failed to prefetch build log.",
+								observedAt,
+							});
+						}
+					}
+				}
 				pruneBuildsForJob(
 					instance.id,
 					fullProjectName,

@@ -7,6 +7,8 @@ export type JenkinsInstanceRecord = {
 	jobs: string[];
 	jobRetentionDays: Record<string, number>;
 	jobMaxBuilds: Record<string, number>;
+	jobPrefetchBuildLogStatuses: Record<string, JenkinsBuildLogPrefetchStatus[]>;
+	jobPrefetchFailedLogs?: Record<string, boolean>;
 	monitoringEnabled: boolean;
 	pollIntervalMinutes: number;
 	createdAt: string;
@@ -40,6 +42,12 @@ export type JenkinsBuildTimeRange = "last12h" | "last1d" | "last7d" | "last1m";
 export type JenkinsJobAnalyticsInput = JenkinsJobDetailsInput & {
 	range: JenkinsBuildTimeRange;
 };
+
+export type JenkinsBuildLogInput = JenkinsJobDetailsInput & {
+	buildNumber: number;
+};
+
+export type JenkinsBuildLogPrefetchStatus = "failure" | "success";
 
 export type JenkinsJobBuildSummary = {
 	number: number;
@@ -144,6 +152,14 @@ export type JenkinsJobActivity = {
 	logs: JenkinsJobLogEntry[];
 };
 
+export type JenkinsBuildLogRecord = {
+	instanceId: JenkinsInstanceId;
+	fullProjectName: string;
+	buildNumber: number;
+	content: string;
+	updatedAt: string;
+};
+
 export type UpsertJenkinsInstanceInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
@@ -151,6 +167,7 @@ export type UpsertJenkinsInstanceInput = {
 	jobs?: string[];
 	jobRetentionDays?: Record<string, number>;
 	jobMaxBuilds?: Record<string, number>;
+	jobPrefetchBuildLogStatuses?: Record<string, JenkinsBuildLogPrefetchStatus[]>;
 	monitoringEnabled?: boolean;
 	pollIntervalMinutes?: number;
 	apiKey?: string;
@@ -248,6 +265,15 @@ export function validateJobActivityInput(
 	return validateJobDetailsInput(input);
 }
 
+export function validateBuildLogInput(
+	input: JenkinsBuildLogInput,
+): JenkinsBuildLogInput {
+	return {
+		...validateJobDetailsInput(input),
+		buildNumber: Math.max(1, Math.round(input.buildNumber)),
+	};
+}
+
 export function normalizeHostUrl(value: string): string {
 	const trimmed = value.trim();
 	const url = new URL(trimmed);
@@ -268,6 +294,10 @@ export function validateInstanceInput(
 		jobs,
 	);
 	const jobMaxBuilds = normalizeJobMaxBuilds(input.jobMaxBuilds, jobs);
+	const jobPrefetchBuildLogStatuses = normalizeJobPrefetchBuildLogStatuses(
+		input.jobPrefetchBuildLogStatuses,
+		jobs,
+	);
 	const monitoringEnabled = input.monitoringEnabled ?? true;
 	const pollIntervalMinutes = normalizePollIntervalMinutes(
 		input.pollIntervalMinutes,
@@ -288,6 +318,7 @@ export function validateInstanceInput(
 		jobs,
 		jobRetentionDays,
 		jobMaxBuilds,
+		jobPrefetchBuildLogStatuses,
 		monitoringEnabled,
 		pollIntervalMinutes,
 		apiKey: input.apiKey?.trim(),
@@ -368,4 +399,34 @@ export function normalizeJobMaxBuildsValue(value?: number): number {
 	}
 
 	return Math.min(100000, Math.max(1, Math.round(value)));
+}
+
+export function normalizeJobPrefetchBuildLogStatuses(
+	value?: Record<string, JenkinsBuildLogPrefetchStatus[]>,
+	jobNames?: string[],
+): Record<string, JenkinsBuildLogPrefetchStatus[]> {
+	const normalizedEntries = Object.entries(value ?? {}).map(
+		([job, statuses]) =>
+			[
+				normalizeFullProjectName(job),
+				normalizeJobPrefetchBuildLogStatusList(statuses),
+			] as const,
+	);
+	const filteredEntries = normalizedEntries.filter(([job]) => Boolean(job));
+	const allowedJobs = jobNames ? new Set(jobNames) : null;
+
+	return Object.fromEntries(
+		filteredEntries.filter(([job]) => !allowedJobs || allowedJobs.has(job)),
+	);
+}
+
+export function normalizeJobPrefetchBuildLogStatusList(
+	value?: JenkinsBuildLogPrefetchStatus[],
+): JenkinsBuildLogPrefetchStatus[] {
+	const normalized = (value ?? ["failure"]).filter(
+		(status): status is JenkinsBuildLogPrefetchStatus =>
+			status === "failure" || status === "success",
+	);
+
+	return normalized.length ? [...new Set(normalized)] : ["failure"];
 }

@@ -5,6 +5,7 @@ import {
 	Updater,
 } from "electrobun/bun";
 import type {
+	JenkinsBuildLogInput,
 	JenkinsConnectionTestInput,
 	JenkinsJobActivityInput,
 	JenkinsJobAnalyticsInput,
@@ -14,6 +15,7 @@ import type {
 import type { AppRPCSchema } from "../shared/rpc";
 import {
 	deleteJenkinsInstance,
+	getJenkinsBuildLog,
 	getJenkinsJobActivity,
 	getJenkinsJobAnalytics,
 	getJenkinsJobDetails,
@@ -64,6 +66,8 @@ const appRpc = BrowserView.defineRPC<AppRPCSchema>({
 				getJenkinsJobActivity(params),
 			getJenkinsJobAnalytics: (params: JenkinsJobAnalyticsInput) =>
 				getJenkinsJobAnalytics(params),
+			getJenkinsBuildLog: (params: JenkinsBuildLogInput) =>
+				getJenkinsBuildLog(params),
 			runJenkinsMonitoringCycle: () => runJenkinsMonitoringCycle(),
 		},
 	},

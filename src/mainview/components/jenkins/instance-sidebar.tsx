@@ -217,7 +217,10 @@ export function InstanceSidebar({
 											</p>
 											<p className="shrink-0 text-[11px] text-muted-foreground">
 												{selectedInstance.jobRetentionDays[job] ?? 90}d /{" "}
-												{selectedInstance.jobMaxBuilds[job] ?? 1000}b
+												{selectedInstance.jobMaxBuilds[job] ?? 1000}b /{" "}
+												{formatPrefetchStatuses(
+													selectedInstance.jobPrefetchBuildLogStatuses[job],
+												)}
 											</p>
 										</div>
 									</button>
@@ -245,4 +248,20 @@ function getInstanceTitle(instance: JenkinsInstanceSummary): string {
 	} catch {
 		return instance.hostUrl;
 	}
+}
+
+function formatPrefetchStatuses(
+	statuses?: Array<"failure" | "success">,
+): string {
+	const normalized = statuses?.length ? statuses : ["failure"];
+
+	if (normalized.includes("failure") && normalized.includes("success")) {
+		return "log: fail+ok";
+	}
+
+	if (normalized.includes("success")) {
+		return "log: ok";
+	}
+
+	return "log: fail";
 }

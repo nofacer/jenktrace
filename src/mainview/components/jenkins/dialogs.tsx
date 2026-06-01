@@ -403,6 +403,62 @@ export function JobDialog({
 						</p>
 					</div>
 
+					<div className="flex flex-col gap-3 rounded-xl border bg-muted/20 px-4 py-3">
+						<div className="space-y-1">
+							<p className="text-sm font-medium">Prefetch build log statuses</p>
+							<p className="text-xs text-muted-foreground">
+								Choose which build results should have logs fetched and stored
+								locally during monitoring. Default is failure only.
+							</p>
+						</div>
+						<label
+							htmlFor="prefetchFailureLogs"
+							className="flex items-start gap-3"
+						>
+							<input
+								id="prefetchFailureLogs"
+								type="checkbox"
+								className="mt-1 size-4"
+								checked={formState.prefetchFailureLogs}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										prefetchFailureLogs: event.target.checked,
+									}))
+								}
+							/>
+							<div className="space-y-1">
+								<p className="text-sm font-medium">Failure</p>
+								<p className="text-xs text-muted-foreground">
+									Prefetch logs for failed builds.
+								</p>
+							</div>
+						</label>
+						<label
+							htmlFor="prefetchSuccessLogs"
+							className="flex items-start gap-3"
+						>
+							<input
+								id="prefetchSuccessLogs"
+								type="checkbox"
+								className="mt-1 size-4"
+								checked={formState.prefetchSuccessLogs}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										prefetchSuccessLogs: event.target.checked,
+									}))
+								}
+							/>
+							<div className="space-y-1">
+								<p className="text-sm font-medium">Success</p>
+								<p className="text-xs text-muted-foreground">
+									Prefetch logs for successful builds.
+								</p>
+							</div>
+						</label>
+					</div>
+
 					{formState.fullProjectName.trim() ? (
 						<div className="grid gap-3 md:grid-cols-2">
 							<InfoTile
