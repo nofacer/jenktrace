@@ -1,0 +1,16 @@
+package.json
+  h_bafa96d59b1234 3
+electrobun.config.ts
+  h_bafa96d59b1234 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ba985ed38dea26a37e17c3b553ae2042bfd14c78",
+  "prompts": {},
+  "humans": {
+    "h_bafa96d59b1234": {
+      "author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
