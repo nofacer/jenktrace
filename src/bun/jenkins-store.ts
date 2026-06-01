@@ -54,6 +54,16 @@ type StoredConfig = {
 	instances: JenkinsInstanceRecord[];
 };
 
+function buildFetchTlsOptions(disableSslVerification: boolean) {
+	if (!disableSslVerification) {
+		return undefined;
+	}
+
+	return {
+		rejectUnauthorized: false,
+	} satisfies BunFetchRequestInitTLS;
+}
+
 type RuntimeSnapshotRow = {
 	instance_id: string;
 	full_project_name: string;
@@ -786,6 +796,7 @@ async function readConfig(): Promise<StoredConfig> {
 		instances: Array.isArray(parsed.instances)
 			? parsed.instances.map((instance) => ({
 					...instance,
+					disableSslVerification: instance.disableSslVerification ?? false,
 					jobs: Array.isArray(instance.jobs) ? instance.jobs : [],
 					jobRetentionDays: normalizeJobRetentionDays(
 						instance.jobRetentionDays,
@@ -907,12 +918,14 @@ async function fetchJsonWithAuth(
 	url: string,
 	username: string,
 	apiKey: string,
+	disableSslVerification = false,
 ): Promise<Response> {
 	return fetch(url, {
 		headers: {
 			Accept: "application/json",
 			Authorization: buildAuthorizationHeader(username, apiKey),
 		},
+		tls: buildFetchTlsOptions(disableSslVerification),
 	});
 }
 
@@ -984,6 +997,7 @@ export async function saveJenkinsInstance(
 					...config.instances[existingIndex],
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
+					disableSslVerification: normalized.disableSslVerification ?? false,
 					jobs: normalized.jobs ?? config.instances[existingIndex].jobs,
 					jobRetentionDays:
 						normalized.jobRetentionDays ??
@@ -1006,6 +1020,7 @@ export async function saveJenkinsInstance(
 					id: normalized.id ?? createId(),
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
+					disableSslVerification: normalized.disableSslVerification ?? false,
 					jobs: normalized.jobs ?? [],
 					jobRetentionDays:
 						normalized.jobRetentionDays ??
@@ -1340,6 +1355,7 @@ async function resolveBuildSummary(
 	build: JenkinsBuildReference | null | undefined,
 	username: string,
 	apiKey: string,
+	disableSslVerification: boolean,
 ): Promise<JenkinsJobBuildSummary | null> {
 	if (!build) {
 		return null;
@@ -1349,6 +1365,7 @@ async function resolveBuildSummary(
 		`${build.url}api/json`,
 		username,
 		apiKey,
+		disableSslVerification,
 	);
 
 	if (!response.ok) {
@@ -1388,6 +1405,7 @@ async function fetchBuildLogForInstance(params: {
 					storedApiKey,
 				),
 			},
+			tls: buildFetchTlsOptions(params.instance.disableSslVerification),
 		});
 	} catch (error) {
 		throw new Error(
@@ -1465,6 +1483,7 @@ async function fetchJobDetailsForInstance(
 			jobApiUrl,
 			instance.username,
 			storedApiKey,
+			instance.disableSslVerification,
 		);
 	} catch (error) {
 		throw new Error(
@@ -1491,21 +1510,29 @@ async function fetchJobDetailsForInstance(
 	const payload = (await response.json()) as JenkinsJobApiResponse;
 	const [lastBuild, lastCompletedBuild, lastSuccessfulBuild, lastFailedBuild] =
 		await Promise.all([
-			resolveBuildSummary(payload.lastBuild, instance.username, storedApiKey),
+			resolveBuildSummary(
+				payload.lastBuild,
+				instance.username,
+				storedApiKey,
+				instance.disableSslVerification,
+			),
 			resolveBuildSummary(
 				payload.lastCompletedBuild,
 				instance.username,
 				storedApiKey,
+				instance.disableSslVerification,
 			),
 			resolveBuildSummary(
 				payload.lastSuccessfulBuild,
 				instance.username,
 				storedApiKey,
+				instance.disableSslVerification,
 			),
 			resolveBuildSummary(
 				payload.lastFailedBuild,
 				instance.username,
 				storedApiKey,
+				instance.disableSslVerification,
 			),
 		]);
 	const builds = Array.isArray(payload.builds)
@@ -1600,6 +1627,7 @@ export async function testJenkinsConnection(
 				Accept: "application/json",
 				Authorization: buildAuthorizationHeader(normalized.username, apiKey),
 			},
+			tls: buildFetchTlsOptions(normalized.disableSslVerification ?? false),
 		});
 	} catch (error) {
 		throw new Error(

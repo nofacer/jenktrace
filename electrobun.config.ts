@@ -4,7 +4,7 @@ export default {
 	app: {
 		name: "jenktrace",
 		identifier: "dev.electrobun.jenktrace",
-		version: "0.0.1",
+		version: "1.0.1",
 	},
 	build: {
 		// Vite builds to dist/, we copy from there
@@ -27,5 +27,8 @@ export default {
 			bundleCEF: false,
 			icon: "assets/icon-1024.png",
 		},
+	},
+	scripts: {
+		postWrap: "scripts/set-macos-bun-options.mjs",
 	},
 } satisfies ElectrobunConfig;

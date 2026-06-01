@@ -8,6 +8,7 @@ export type InstanceFormState = {
 	hostUrl: string;
 	username: string;
 	apiKey: string;
+	disableSslVerification: boolean;
 	monitoringEnabled: boolean;
 	pollIntervalMinutes: string;
 };
@@ -28,6 +29,7 @@ export const EMPTY_FORM: InstanceFormState = {
 	hostUrl: "",
 	username: "",
 	apiKey: "",
+	disableSslVerification: false,
 	monitoringEnabled: true,
 	pollIntervalMinutes: "5",
 };
@@ -52,6 +54,7 @@ export function buildFormState(
 		hostUrl: instance.hostUrl,
 		username: instance.username,
 		apiKey: "",
+		disableSslVerification: instance.disableSslVerification,
 		monitoringEnabled: instance.monitoringEnabled,
 		pollIntervalMinutes: String(instance.pollIntervalMinutes),
 	};
