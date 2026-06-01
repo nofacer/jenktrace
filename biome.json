@@ -6,6 +6,7 @@
 			"!.agents",
 			"!dist",
 			"!build",
+			"!artifacts",
 			"!node_modules",
 			"!components.json",
 			"!skills-lock.json",

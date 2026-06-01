@@ -1,378 +1,620 @@
-import {
-	LoaderCircleIcon,
-	PencilLineIcon,
-	PlusIcon,
-	ServerCogIcon,
-	ShieldCheckIcon,
-	Trash2Icon,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import type { InstanceFormState, JobFormState } from "@/components/jenkins";
 import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardFooter,
-	CardHeader,
-	CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
+	buildFormState,
+	buildJobFormState,
+	DeleteInstanceDialog,
+	DeleteJobDialog,
+	DetailsPanel,
+	EMPTY_FORM,
+	EMPTY_JOB_FORM,
+	InstanceDialog,
+	InstanceSidebar,
+	JobDialog,
+} from "@/components/jenkins";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { appRpc } from "@/lib/app-rpc";
 import type {
+	JenkinsBuildTimeRange,
+	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
+	JenkinsJobActivity,
+	JenkinsJobAnalytics,
+	JenkinsJobDetails,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
-import { appRpc } from "./lib/app-rpc";
+import { normalizeFullProjectName } from "../shared/jenkins";
 
-type FormState = {
-	id?: string;
-	hostUrl: string;
-	username: string;
-	apiKey: string;
-};
-
-const emptyForm: FormState = {
-	hostUrl: "",
-	username: "",
-	apiKey: "",
-};
-
-function App() {
+export default function App() {
 	const [instances, setInstances] = useState<JenkinsInstanceSummary[]>([]);
-	const [form, setForm] = useState<FormState>(emptyForm);
+	const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(
+		null,
+	);
+	const [selectedJob, setSelectedJob] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isSaving, setIsSaving] = useState(false);
-	const [isDeleting, setIsDeleting] = useState<string | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [status, setStatus] = useState<string | null>(null);
+	const [isSavingJob, setIsSavingJob] = useState(false);
+	const [isDeleting, setIsDeleting] = useState(false);
+	const [isDeletingJob, setIsDeletingJob] = useState(false);
+	const [isTesting, setIsTesting] = useState(false);
+	const [isLoadingJobDetails, setIsLoadingJobDetails] = useState(false);
+	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = useState(false);
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+	const [isDeleteJobDialogOpen, setIsDeleteJobDialogOpen] = useState(false);
+	const [instanceDialogMode, setInstanceDialogMode] = useState<
+		"create" | "edit"
+	>("create");
+	const [instanceFormState, setInstanceFormState] =
+		useState<InstanceFormState>(EMPTY_FORM);
+	const [isJobDialogOpen, setIsJobDialogOpen] = useState(false);
+	const [jobDialogMode, setJobDialogMode] = useState<"create" | "edit">(
+		"create",
+	);
+	const [jobFormState, setJobFormState] =
+		useState<JobFormState>(EMPTY_JOB_FORM);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [jobErrorMessage, setJobErrorMessage] = useState<string | null>(null);
+	const [jobDetailsError, setJobDetailsError] = useState<string | null>(null);
+	const [jobActivityError, setJobActivityError] = useState<string | null>(null);
+	const [jobAnalyticsError, setJobAnalyticsError] = useState<string | null>(
+		null,
+	);
+	const [deleteJobErrorMessage, setDeleteJobErrorMessage] = useState<
+		string | null
+	>(null);
+	const [testResult, setTestResult] =
+		useState<JenkinsConnectionTestResult | null>(null);
+	const [jobDetails, setJobDetails] = useState<JenkinsJobDetails | null>(null);
+	const [jobActivity, setJobActivity] = useState<JenkinsJobActivity | null>(
+		null,
+	);
+	const [jobAnalytics, setJobAnalytics] = useState<JenkinsJobAnalytics | null>(
+		null,
+	);
+	const [selectedTimeRange, setSelectedTimeRange] =
+		useState<JenkinsBuildTimeRange>("last7d");
+
+	const selectedInstance = useMemo(
+		() =>
+			instances.find((instance) => instance.id === selectedInstanceId) ?? null,
+		[instances, selectedInstanceId],
+	);
 
 	useEffect(() => {
-		setIsLoading(true);
-		setError(null);
+		const run = async () => {
+			setIsLoading(true);
+			setErrorMessage(null);
 
-		void appRpc.request
-			.listJenkinsInstances()
-			.then((nextInstances) => {
+			try {
+				const nextInstances = await appRpc.proxy.request.listJenkinsInstances();
 				setInstances(nextInstances);
-			})
-			.catch((nextError) => {
-				setError(getErrorMessage(nextError));
-			})
-			.finally(() => {
+				setSelectedInstanceId(nextInstances[0]?.id ?? null);
+			} catch (error) {
+				setErrorMessage(
+					error instanceof Error ? error.message : "Failed to load instances.",
+				);
+			} finally {
 				setIsLoading(false);
-			});
-	}, []);
-
-	function startCreate() {
-		setForm(emptyForm);
-		setError(null);
-		setStatus(null);
-	}
-
-	function startEdit(instance: JenkinsInstanceSummary) {
-		setForm({
-			id: instance.id,
-			hostUrl: instance.hostUrl,
-			username: instance.username,
-			apiKey: "",
-		});
-		setError(null);
-		setStatus(
-			instance.hasApiKey
-				? "Leave API key empty to keep the stored secret unchanged."
-				: "This instance does not have an API key stored yet.",
-		);
-	}
-
-	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-		event.preventDefault();
-		setIsSaving(true);
-		setError(null);
-		setStatus(null);
-
-		const payload: UpsertJenkinsInstanceInput = {
-			id: form.id,
-			hostUrl: form.hostUrl,
-			username: form.username,
-			apiKey: form.apiKey,
+			}
 		};
 
-		if (!payload.id && !payload.apiKey?.trim()) {
-			setError("An API key is required when adding a new instance.");
-			setIsSaving(false);
+		void run();
+	}, []);
+
+	useEffect(() => {
+		if (!selectedInstance) {
+			setSelectedJob(null);
 			return;
 		}
 
+		setSelectedJob((currentJob) =>
+			currentJob && selectedInstance.jobs.includes(currentJob)
+				? currentJob
+				: (selectedInstance.jobs[0] ?? null),
+		);
+	}, [selectedInstance]);
+
+	useEffect(() => {
+		if (!selectedInstance || !selectedJob) {
+			setJobDetails(null);
+			setJobDetailsError(null);
+			setJobActivity(null);
+			setJobActivityError(null);
+			setJobAnalytics(null);
+			setJobAnalyticsError(null);
+			setIsLoadingJobDetails(false);
+			return;
+		}
+
+		let isCancelled = false;
+
+		const run = async () => {
+			setIsLoadingJobDetails(true);
+			setJobDetailsError(null);
+			setJobActivityError(null);
+			setJobAnalyticsError(null);
+
+			try {
+				const [nextDetails, nextActivity, nextAnalytics] = await Promise.all([
+					appRpc.proxy.request.getJenkinsJobDetails({
+						instanceId: selectedInstance.id,
+						fullProjectName: selectedJob,
+					}),
+					appRpc.proxy.request.getJenkinsJobActivity({
+						instanceId: selectedInstance.id,
+						fullProjectName: selectedJob,
+					}),
+					appRpc.proxy.request.getJenkinsJobAnalytics({
+						instanceId: selectedInstance.id,
+						fullProjectName: selectedJob,
+						range: selectedTimeRange,
+					}),
+				]);
+
+				if (!isCancelled) {
+					setJobDetails(nextDetails);
+					setJobActivity(nextActivity);
+					setJobAnalytics(nextAnalytics);
+				}
+			} catch (error) {
+				if (!isCancelled) {
+					setJobDetails(null);
+					setJobActivity(null);
+					setJobAnalytics(null);
+					setJobDetailsError(
+						error instanceof Error
+							? error.message
+							: "Failed to load Jenkins job details.",
+					);
+					setJobActivityError(
+						error instanceof Error ? error.message : "Failed to load activity.",
+					);
+					setJobAnalyticsError(
+						error instanceof Error
+							? error.message
+							: "Failed to load build analytics.",
+					);
+				}
+			} finally {
+				if (!isCancelled) {
+					setIsLoadingJobDetails(false);
+				}
+			}
+		};
+
+		void run();
+
+		return () => {
+			isCancelled = true;
+		};
+	}, [selectedInstance, selectedJob, selectedTimeRange]);
+
+	function openCreateDialog() {
+		setInstanceDialogMode("create");
+		setInstanceFormState(EMPTY_FORM);
+		setTestResult(null);
+		setErrorMessage(null);
+		setIsInstanceDialogOpen(true);
+	}
+
+	function openEditDialog() {
+		if (!selectedInstance) {
+			return;
+		}
+
+		setInstanceDialogMode("edit");
+		setInstanceFormState(buildFormState(selectedInstance));
+		setTestResult(null);
+		setErrorMessage(null);
+		setIsInstanceDialogOpen(true);
+	}
+
+	function openDeleteDialog() {
+		if (!selectedInstance || isDeleting) {
+			return;
+		}
+
+		setErrorMessage(null);
+		setIsDeleteDialogOpen(true);
+	}
+
+	function openCreateJobDialog() {
+		if (!selectedInstance) {
+			return;
+		}
+
+		setJobDialogMode("create");
+		setJobFormState(EMPTY_JOB_FORM);
+		setJobErrorMessage(null);
+		setIsJobDialogOpen(true);
+	}
+
+	function openEditJobDialog() {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
+
+		setJobDialogMode("edit");
+		setJobFormState(
+			buildJobFormState(
+				selectedJob,
+				selectedInstance.jobRetentionDays[selectedJob],
+				selectedInstance.jobMaxBuilds[selectedJob],
+				selectedInstance.jobPrefetchBuildLogStatuses[selectedJob] ?? [
+					"failure",
+				],
+			),
+		);
+		setJobErrorMessage(null);
+		setIsJobDialogOpen(true);
+	}
+
+	function openDeleteJobDialog() {
+		if (!selectedInstance || !selectedJob || isDeletingJob) {
+			return;
+		}
+
+		setDeleteJobErrorMessage(null);
+		setIsDeleteJobDialogOpen(true);
+	}
+
+	async function handleSave() {
+		setIsSaving(true);
+		setErrorMessage(null);
+
 		try {
-			const nextInstances = await appRpc.request.saveJenkinsInstance(payload);
+			const payload: UpsertJenkinsInstanceInput = {
+				id: instanceFormState.id,
+				hostUrl: instanceFormState.hostUrl,
+				username: instanceFormState.username,
+				monitoringEnabled: instanceFormState.monitoringEnabled,
+				pollIntervalMinutes: Number(instanceFormState.pollIntervalMinutes),
+				apiKey: instanceFormState.apiKey || undefined,
+			};
+
+			const nextInstances =
+				await appRpc.proxy.request.saveJenkinsInstance(payload);
+			const savedId =
+				payload.id ??
+				nextInstances.find(
+					(instance) =>
+						instance.hostUrl === payload.hostUrl &&
+						instance.username === payload.username,
+				)?.id ??
+				null;
+
 			setInstances(nextInstances);
-			setForm(emptyForm);
-			setStatus(
-				payload.id
-					? "Instance updated. API key is stored in the system credential manager."
-					: "Instance added. API key is stored in the system credential manager.",
+			setSelectedInstanceId(savedId);
+			setIsInstanceDialogOpen(false);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error ? error.message : "Failed to save instance.",
 			);
-		} catch (nextError) {
-			setError(getErrorMessage(nextError));
 		} finally {
 			setIsSaving(false);
 		}
 	}
 
-	async function handleDelete(instanceId: string) {
-		setIsDeleting(instanceId);
-		setError(null);
-		setStatus(null);
+	async function handleDelete() {
+		if (!selectedInstance) {
+			return;
+		}
+
+		setIsDeleting(true);
+		setErrorMessage(null);
 
 		try {
-			const nextInstances = await appRpc.request.deleteJenkinsInstance({
-				id: instanceId,
+			const nextInstances = await appRpc.proxy.request.deleteJenkinsInstance({
+				id: selectedInstance.id,
 			});
 			setInstances(nextInstances);
-			if (form.id === instanceId) {
-				setForm(emptyForm);
-			}
-			setStatus("Instance removed.");
-		} catch (nextError) {
-			setError(getErrorMessage(nextError));
+			setSelectedInstanceId(nextInstances[0]?.id ?? null);
+			setIsDeleteDialogOpen(false);
+			setIsInstanceDialogOpen(false);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error ? error.message : "Failed to delete instance.",
+			);
 		} finally {
-			setIsDeleting(null);
+			setIsDeleting(false);
+		}
+	}
+
+	async function handleTestConnection() {
+		setIsTesting(true);
+		setErrorMessage(null);
+		setTestResult(null);
+
+		try {
+			const result = await appRpc.proxy.request.testJenkinsConnection({
+				id: instanceFormState.id,
+				hostUrl: instanceFormState.hostUrl,
+				username: instanceFormState.username,
+				apiKey: instanceFormState.apiKey || undefined,
+			});
+			setTestResult(result);
+		} catch (error) {
+			setErrorMessage(
+				error instanceof Error ? error.message : "Failed to test connection.",
+			);
+		} finally {
+			setIsTesting(false);
+		}
+	}
+
+	async function handleSaveJob() {
+		if (!selectedInstance) {
+			return;
+		}
+
+		setIsSavingJob(true);
+		setJobErrorMessage(null);
+
+		try {
+			const nextName = normalizeFullProjectName(jobFormState.fullProjectName);
+
+			if (!nextName) {
+				throw new Error("Full project name is required.");
+			}
+
+			const previousName = jobFormState.originalName;
+			const retentionDays = Number(jobFormState.retentionDays);
+			const maxBuilds = Number(jobFormState.maxBuilds);
+			const duplicate = selectedInstance.jobs.find(
+				(job) => job === nextName && job !== previousName,
+			);
+
+			if (duplicate) {
+				throw new Error(
+					"A job with the same Full project name already exists.",
+				);
+			}
+
+			const nextJobs = previousName
+				? selectedInstance.jobs.map((job) =>
+						job === previousName ? nextName : job,
+					)
+				: [...selectedInstance.jobs, nextName];
+			const nextRetentionDays = {
+				...selectedInstance.jobRetentionDays,
+			};
+			const nextMaxBuilds = {
+				...selectedInstance.jobMaxBuilds,
+			};
+			const nextPrefetchBuildLogStatuses = {
+				...selectedInstance.jobPrefetchBuildLogStatuses,
+			};
+			const nextPrefetchStatuses: Array<"failure" | "success"> = [];
+
+			if (jobFormState.prefetchFailureLogs) {
+				nextPrefetchStatuses.push("failure" as const);
+			}
+
+			if (jobFormState.prefetchSuccessLogs) {
+				nextPrefetchStatuses.push("success" as const);
+			}
+
+			if (previousName && previousName !== nextName) {
+				delete nextRetentionDays[previousName];
+				delete nextMaxBuilds[previousName];
+				delete nextPrefetchBuildLogStatuses[previousName];
+			}
+
+			nextRetentionDays[nextName] = retentionDays;
+			nextMaxBuilds[nextName] = maxBuilds;
+			nextPrefetchBuildLogStatuses[nextName] =
+				nextPrefetchStatuses.length > 0
+					? nextPrefetchStatuses
+					: (["failure"] as const);
+
+			const nextInstances = await appRpc.proxy.request.saveJenkinsInstance({
+				id: selectedInstance.id,
+				hostUrl: selectedInstance.hostUrl,
+				username: selectedInstance.username,
+				jobs: nextJobs,
+				jobRetentionDays: nextRetentionDays,
+				jobMaxBuilds: nextMaxBuilds,
+				jobPrefetchBuildLogStatuses: nextPrefetchBuildLogStatuses,
+			});
+
+			setInstances(nextInstances);
+			setSelectedInstanceId(selectedInstance.id);
+			setSelectedJob(nextName);
+			setIsJobDialogOpen(false);
+		} catch (error) {
+			setJobErrorMessage(
+				error instanceof Error ? error.message : "Failed to save job.",
+			);
+		} finally {
+			setIsSavingJob(false);
+		}
+	}
+
+	async function refreshSelectedJob() {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
+
+		setIsLoadingJobDetails(true);
+		setJobDetailsError(null);
+		setJobActivityError(null);
+		setJobAnalyticsError(null);
+
+		try {
+			const [nextDetails, nextActivity, nextAnalytics] = await Promise.all([
+				appRpc.proxy.request.getJenkinsJobDetails({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+				}),
+				appRpc.proxy.request.getJenkinsJobActivity({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+				}),
+				appRpc.proxy.request.getJenkinsJobAnalytics({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+					range: selectedTimeRange,
+				}),
+			]);
+			setJobDetails(nextDetails);
+			setJobActivity(nextActivity);
+			setJobAnalytics(nextAnalytics);
+		} catch (error) {
+			setJobDetails(null);
+			setJobActivity(null);
+			setJobAnalytics(null);
+			setJobDetailsError(
+				error instanceof Error
+					? error.message
+					: "Failed to load Jenkins job details.",
+			);
+			setJobActivityError(
+				error instanceof Error ? error.message : "Failed to load activity.",
+			);
+			setJobAnalyticsError(
+				error instanceof Error
+					? error.message
+					: "Failed to load build analytics.",
+			);
+		} finally {
+			setIsLoadingJobDetails(false);
+		}
+	}
+
+	async function handleDeleteJob() {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
+
+		setIsDeletingJob(true);
+		setDeleteJobErrorMessage(null);
+
+		const currentJobIndex = selectedInstance.jobs.indexOf(selectedJob);
+		const nextJobs = selectedInstance.jobs.filter((job) => job !== selectedJob);
+		const nextRetentionDays = { ...selectedInstance.jobRetentionDays };
+		const nextMaxBuilds = { ...selectedInstance.jobMaxBuilds };
+		const nextPrefetchBuildLogStatuses = {
+			...selectedInstance.jobPrefetchBuildLogStatuses,
+		};
+		delete nextRetentionDays[selectedJob];
+		delete nextMaxBuilds[selectedJob];
+		delete nextPrefetchBuildLogStatuses[selectedJob];
+		const nextSelectedJob =
+			nextJobs[currentJobIndex] ?? nextJobs[currentJobIndex - 1] ?? null;
+
+		try {
+			const nextInstances = await appRpc.proxy.request.saveJenkinsInstance({
+				id: selectedInstance.id,
+				hostUrl: selectedInstance.hostUrl,
+				username: selectedInstance.username,
+				jobs: nextJobs,
+				jobRetentionDays: nextRetentionDays,
+				jobMaxBuilds: nextMaxBuilds,
+				jobPrefetchBuildLogStatuses: nextPrefetchBuildLogStatuses,
+			});
+
+			setInstances(nextInstances);
+			setSelectedInstanceId(selectedInstance.id);
+			setSelectedJob(nextSelectedJob);
+			setJobDetails(null);
+			setJobDetailsError(null);
+			setJobActivity(null);
+			setJobActivityError(null);
+			setJobAnalytics(null);
+			setJobAnalyticsError(null);
+			setIsDeleteJobDialogOpen(false);
+		} catch (error) {
+			setDeleteJobErrorMessage(
+				error instanceof Error ? error.message : "Failed to delete job.",
+			);
+		} finally {
+			setIsDeletingJob(false);
 		}
 	}
 
 	return (
-		<div className="theme min-h-screen bg-background">
-			<div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-6 py-8 lg:px-10">
-				<section className="flex flex-col gap-4 rounded-[2rem] border bg-card p-8 shadow-sm">
-					<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-						<div className="flex max-w-3xl flex-col gap-3">
-							<Badge variant="secondary">
-								<ServerCogIcon data-icon="inline-start" />
-								Jenkins Instances
-							</Badge>
-							<div className="flex flex-col gap-2">
-								<h1 className="font-heading text-4xl leading-tight font-medium tracking-tight">
-									Manage multiple Jenkins connections locally.
-								</h1>
-								<p className="max-w-2xl text-base leading-7 text-muted-foreground">
-									Each instance stores host URL and username in app config,
-									while the API key is kept in the system credential manager.
-								</p>
-							</div>
-						</div>
-						<Button onClick={startCreate} variant="outline">
-							<PlusIcon data-icon="inline-start" />
-							Add instance
-						</Button>
-					</div>
+		<TooltipProvider>
+			<div className="flex h-screen bg-background text-foreground">
+				<InstanceSidebar
+					instances={instances}
+					selectedInstanceId={selectedInstanceId}
+					selectedInstance={selectedInstance}
+					selectedJob={selectedJob}
+					isLoading={isLoading}
+					isDeleting={isDeleting}
+					onCreateInstance={openCreateDialog}
+					onSelectInstance={setSelectedInstanceId}
+					onEditInstance={openEditDialog}
+					onDeleteInstance={openDeleteDialog}
+					onCreateJob={openCreateJobDialog}
+					onSelectJob={setSelectedJob}
+				/>
 
-					{status ? (
-						<div className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm">
-							{status}
-						</div>
-					) : null}
+				<DetailsPanel
+					selectedInstance={selectedInstance}
+					selectedJob={selectedJob}
+					jobDetails={jobDetails}
+					jobActivity={jobActivity}
+					jobAnalytics={jobAnalytics}
+					jobDetailsError={jobDetailsError}
+					jobActivityError={jobActivityError}
+					jobAnalyticsError={jobAnalyticsError}
+					selectedTimeRange={selectedTimeRange}
+					isLoadingJobDetails={isLoadingJobDetails}
+					isDeletingJob={isDeletingJob}
+					onTimeRangeChange={setSelectedTimeRange}
+					onRefreshJob={refreshSelectedJob}
+					onEditJob={openEditJobDialog}
+					onDeleteJob={openDeleteJobDialog}
+				/>
 
-					{error ? (
-						<div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-							{error}
-						</div>
-					) : null}
-				</section>
+				<DeleteInstanceDialog
+					open={isDeleteDialogOpen}
+					onOpenChange={setIsDeleteDialogOpen}
+					selectedInstance={selectedInstance}
+					errorMessage={errorMessage}
+					isDeleting={isDeleting}
+					onDelete={handleDelete}
+				/>
 
-				<section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-					<Card>
-						<CardHeader>
-							<CardTitle>Saved instances</CardTitle>
-							<CardDescription>
-								Edit an existing Jenkins connection or add a new one.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="flex flex-col gap-4">
-							{isLoading ? (
-								<div className="flex items-center gap-3 rounded-xl border bg-muted/50 px-4 py-6 text-sm text-muted-foreground">
-									<LoaderCircleIcon className="animate-spin" />
-									Loading instances...
-								</div>
-							) : instances.length === 0 ? (
-								<div className="rounded-2xl border border-dashed bg-muted/40 px-5 py-8 text-sm text-muted-foreground">
-									No Jenkins instances saved yet. Add your first instance to get
-									started.
-								</div>
-							) : (
-								instances.map((instance, index) => (
-									<div key={instance.id} className="flex flex-col gap-4">
-										<div className="flex flex-col gap-4 rounded-2xl border bg-background p-4">
-											<div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-												<div className="flex min-w-0 flex-col gap-2">
-													<div className="flex flex-wrap items-center gap-2">
-														<h3 className="truncate font-medium">
-															{instance.hostUrl}
-														</h3>
-														<Badge variant="outline">{instance.username}</Badge>
-													</div>
-													<div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-														<span>
-															Updated {formatDate(instance.updatedAt)}
-														</span>
-														<Badge
-															variant={
-																instance.hasApiKey ? "secondary" : "outline"
-															}
-														>
-															<ShieldCheckIcon data-icon="inline-start" />
-															{instance.hasApiKey
-																? "API key stored"
-																: "Missing API key"}
-														</Badge>
-													</div>
-												</div>
+				<DeleteJobDialog
+					open={isDeleteJobDialogOpen}
+					onOpenChange={setIsDeleteJobDialogOpen}
+					selectedInstance={selectedInstance}
+					selectedJob={selectedJob}
+					errorMessage={deleteJobErrorMessage}
+					isDeleting={isDeletingJob}
+					onDelete={handleDeleteJob}
+				/>
 
-												<div className="flex gap-2">
-													<Button
-														onClick={() => startEdit(instance)}
-														size="sm"
-														variant="outline"
-													>
-														<PencilLineIcon data-icon="inline-start" />
-														Edit
-													</Button>
-													<Button
-														onClick={() => handleDelete(instance.id)}
-														size="sm"
-														variant="ghost"
-														disabled={isDeleting === instance.id}
-													>
-														<Trash2Icon data-icon="inline-start" />
-														{isDeleting === instance.id
-															? "Removing..."
-															: "Delete"}
-													</Button>
-												</div>
-											</div>
-										</div>
-										{index < instances.length - 1 ? <Separator /> : null}
-									</div>
-								))
-							)}
-						</CardContent>
-					</Card>
+				<InstanceDialog
+					open={isInstanceDialogOpen}
+					onOpenChange={setIsInstanceDialogOpen}
+					mode={instanceDialogMode}
+					formState={instanceFormState}
+					onFormStateChange={setInstanceFormState}
+					errorMessage={errorMessage}
+					testResult={testResult}
+					isSaving={isSaving}
+					isDeleting={isDeleting}
+					isTesting={isTesting}
+					onTestConnection={handleTestConnection}
+					onSave={handleSave}
+				/>
 
-					<Card>
-						<CardHeader>
-							<CardTitle>
-								{form.id ? "Edit instance" : "Add instance"}
-							</CardTitle>
-							<CardDescription>
-								Save a Jenkins base URL, username, and API key for later use.
-							</CardDescription>
-						</CardHeader>
-						<form onSubmit={handleSubmit}>
-							<CardContent className="flex flex-col gap-5">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="host-url">Host URL</Label>
-									<Input
-										id="host-url"
-										placeholder="https://jenkins.example.com"
-										value={form.hostUrl}
-										onChange={(event) =>
-											setForm((current) => ({
-												...current,
-												hostUrl: event.target.value,
-											}))
-										}
-									/>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="username">Username</Label>
-									<Input
-										id="username"
-										placeholder="automation-user"
-										value={form.username}
-										onChange={(event) =>
-											setForm((current) => ({
-												...current,
-												username: event.target.value,
-											}))
-										}
-									/>
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="api-key">API key / token</Label>
-									<Textarea
-										id="api-key"
-										placeholder={
-											form.id
-												? "Leave empty to keep the stored API key"
-												: "Paste the Jenkins API key or token"
-										}
-										value={form.apiKey}
-										onChange={(event) =>
-											setForm((current) => ({
-												...current,
-												apiKey: event.target.value,
-											}))
-										}
-									/>
-									<p className="text-sm leading-6 text-muted-foreground">
-										The API key is written to the system credential manager and
-										not stored in the plain-text config file.
-									</p>
-								</div>
-							</CardContent>
-
-							<CardFooter className="justify-between gap-3">
-								<Button
-									type="button"
-									onClick={startCreate}
-									variant="ghost"
-									disabled={isSaving}
-								>
-									Clear
-								</Button>
-								<Button type="submit" disabled={isSaving}>
-									{isSaving ? (
-										<>
-											<LoaderCircleIcon
-												className="animate-spin"
-												data-icon="inline-start"
-											/>
-											Saving...
-										</>
-									) : (
-										<>
-											<ShieldCheckIcon data-icon="inline-start" />
-											{form.id ? "Save changes" : "Save instance"}
-										</>
-									)}
-								</Button>
-							</CardFooter>
-						</form>
-					</Card>
-				</section>
+				<JobDialog
+					open={isJobDialogOpen}
+					onOpenChange={setIsJobDialogOpen}
+					mode={jobDialogMode}
+					formState={jobFormState}
+					onFormStateChange={setJobFormState}
+					errorMessage={jobErrorMessage}
+					isSaving={isSavingJob}
+					selectedInstance={selectedInstance}
+					onSave={handleSaveJob}
+				/>
 			</div>
-		</div>
+		</TooltipProvider>
 	);
 }
-
-function formatDate(value: string): string {
-	return new Intl.DateTimeFormat(undefined, {
-		dateStyle: "medium",
-		timeStyle: "short",
-	}).format(new Date(value));
-}
-
-function getErrorMessage(error: unknown): string {
-	if (error instanceof Error) {
-		return error.message;
-	}
-
-	return "Something went wrong.";
-}
-
-export default App;
