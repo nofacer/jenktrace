@@ -1,4 +1,9 @@
-import { BrowserView, BrowserWindow, Updater } from "electrobun/bun";
+import {
+	ApplicationMenu,
+	BrowserView,
+	BrowserWindow,
+	Updater,
+} from "electrobun/bun";
 import type {
 	JenkinsConnectionTestInput,
 	JenkinsJobDetailsInput,
@@ -51,6 +56,36 @@ const appRpc = BrowserView.defineRPC<AppRPCSchema>({
 		},
 	},
 });
+
+ApplicationMenu.setApplicationMenu([
+	{
+		label: "Jenktrace",
+		submenu: [{ role: "about" }, { type: "divider" }, { role: "quit" }],
+	},
+	{
+		label: "Edit",
+		submenu: [
+			{ role: "undo" },
+			{ role: "redo" },
+			{ type: "divider" },
+			{ role: "cut" },
+			{ role: "copy" },
+			{ role: "paste" },
+			{ role: "pasteAndMatchStyle" },
+			{ role: "delete" },
+			{ role: "selectAll" },
+		],
+	},
+	{
+		label: "Window",
+		submenu: [
+			{ role: "minimize" },
+			{ role: "zoom" },
+			{ type: "divider" },
+			{ role: "enterFullScreen" },
+		],
+	},
+]);
 
 new BrowserWindow({
 	title: "React + Tailwind + Vite",
