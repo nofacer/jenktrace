@@ -62,6 +62,19 @@ const RANGE_OPTIONS: Array<{ label: string; value: JenkinsBuildTimeRange }> = [
 	{ label: "Last 7d", value: "last7d" },
 	{ label: "Last 1m", value: "last1m" },
 ];
+const ANALYTICS_SKELETON_KEYS = [
+	"total-builds",
+	"success-rate",
+	"successful-builds",
+	"failed-builds",
+	"avg-duration",
+] as const;
+const BUILD_ROW_SKELETON_KEYS = [
+	"build-row-1",
+	"build-row-2",
+	"build-row-3",
+	"build-row-4",
+] as const;
 
 const buildVolumeChartConfig = {
 	successful: {
@@ -96,6 +109,7 @@ export function DetailsPanel({
 	jobAnalyticsError,
 	selectedTimeRange,
 	isLoadingJobDetails,
+	isLoadingJobAnalytics,
 	isDeletingJob,
 	onTimeRangeChange,
 	onRefreshJob,
@@ -112,6 +126,7 @@ export function DetailsPanel({
 	jobAnalyticsError: string | null;
 	selectedTimeRange: JenkinsBuildTimeRange;
 	isLoadingJobDetails: boolean;
+	isLoadingJobAnalytics: boolean;
 	isDeletingJob: boolean;
 	onTimeRangeChange: (range: JenkinsBuildTimeRange) => void;
 	onRefreshJob: () => void;
@@ -206,7 +221,7 @@ export function DetailsPanel({
 
 			<div className="flex-1 overflow-y-auto p-6">
 				<div className="flex flex-col gap-6">
-					{isLoadingJobDetails ? (
+					{isLoadingJobDetails && !jobDetails ? (
 						<Card className="border-dashed bg-background/70">
 							<CardHeader>
 								<CardTitle>Loading build analytics</CardTitle>
@@ -266,6 +281,7 @@ export function DetailsPanel({
 											}}
 											variant="outline"
 											size="sm"
+											disabled={isLoadingJobAnalytics}
 										>
 											{RANGE_OPTIONS.map((option) => (
 												<ToggleGroupItem
@@ -279,137 +295,157 @@ export function DetailsPanel({
 									</div>
 								</CardHeader>
 								<CardContent className="flex flex-col gap-6">
-									<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-										<InfoTile
-											label="Total builds"
-											value={String(jobAnalytics?.totalBuilds ?? 0)}
-										/>
-										<InfoTile
-											label="Success rate"
-											value={formatPercent(jobAnalytics?.successRate)}
-										/>
-										<InfoTile
-											label="Successful"
-											value={String(jobAnalytics?.successfulBuilds ?? 0)}
-										/>
-										<InfoTile
-											label="Failed"
-											value={String(jobAnalytics?.failedBuilds ?? 0)}
-										/>
-										<InfoTile
-											label="Avg duration"
-											value={formatDuration(
-												jobAnalytics?.averageDurationMs ?? undefined,
-											)}
-										/>
-									</div>
+									{isLoadingJobAnalytics ? (
+										<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+											{ANALYTICS_SKELETON_KEYS.map((key) => (
+												<Skeleton
+													key={key}
+													className="h-24 w-full rounded-xl"
+												/>
+											))}
+										</div>
+									) : (
+										<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+											<InfoTile
+												label="Total builds"
+												value={String(jobAnalytics?.totalBuilds ?? 0)}
+											/>
+											<InfoTile
+												label="Success rate"
+												value={formatPercent(jobAnalytics?.successRate)}
+											/>
+											<InfoTile
+												label="Successful"
+												value={String(jobAnalytics?.successfulBuilds ?? 0)}
+											/>
+											<InfoTile
+												label="Failed"
+												value={String(jobAnalytics?.failedBuilds ?? 0)}
+											/>
+											<InfoTile
+												label="Avg duration"
+												value={formatDuration(
+													jobAnalytics?.averageDurationMs ?? undefined,
+												)}
+											/>
+										</div>
+									)}
 
-									<div className="grid gap-4 xl:grid-cols-2">
-										<Card className="bg-background">
-											<CardHeader>
-												<CardTitle>Build volume</CardTitle>
-												<CardDescription>
-													Counts grouped by time bucket for the active range.
-												</CardDescription>
-											</CardHeader>
-											<CardContent>
-												<ChartContainer
-													config={buildVolumeChartConfig}
-													className="h-72 w-full"
-												>
-													<BarChart data={bucketRows}>
-														<CartesianGrid vertical={false} />
-														<XAxis
-															dataKey="label"
-															tickLine={false}
-															axisLine={false}
-															minTickGap={24}
-														/>
-														<YAxis
-															allowDecimals={false}
-															tickLine={false}
-															axisLine={false}
-														/>
-														<ChartTooltip
-															content={
-																<ChartTooltipContent
-																	labelKey="label"
-																	indicator="dashed"
-																/>
-															}
-														/>
-														<Bar
-															dataKey="successful"
-															stackId="builds"
-															fill="var(--color-successful)"
-															radius={[4, 4, 0, 0]}
-														/>
-														<Bar
-															dataKey="failed"
-															stackId="builds"
-															fill="var(--color-failed)"
-														/>
-														<Bar
-															dataKey="running"
-															stackId="builds"
-															fill="var(--color-running)"
-														/>
-													</BarChart>
-												</ChartContainer>
-											</CardContent>
-										</Card>
+									{isLoadingJobAnalytics ? (
+										<div className="grid gap-4 xl:grid-cols-2">
+											<Skeleton className="h-72 w-full rounded-xl" />
+											<Skeleton className="h-72 w-full rounded-xl" />
+										</div>
+									) : (
+										<div className="grid gap-4 xl:grid-cols-2">
+											<Card className="bg-background">
+												<CardHeader>
+													<CardTitle>Build volume</CardTitle>
+													<CardDescription>
+														Counts grouped by time bucket for the active range.
+													</CardDescription>
+												</CardHeader>
+												<CardContent>
+													<ChartContainer
+														config={buildVolumeChartConfig}
+														className="h-72 w-full"
+													>
+														<BarChart data={bucketRows}>
+															<CartesianGrid vertical={false} />
+															<XAxis
+																dataKey="label"
+																tickLine={false}
+																axisLine={false}
+																minTickGap={24}
+															/>
+															<YAxis
+																allowDecimals={false}
+																tickLine={false}
+																axisLine={false}
+															/>
+															<ChartTooltip
+																content={
+																	<ChartTooltipContent
+																		labelKey="label"
+																		indicator="dashed"
+																	/>
+																}
+															/>
+															<Bar
+																dataKey="successful"
+																stackId="builds"
+																fill="var(--color-successful)"
+																radius={[4, 4, 0, 0]}
+															/>
+															<Bar
+																dataKey="failed"
+																stackId="builds"
+																fill="var(--color-failed)"
+															/>
+															<Bar
+																dataKey="running"
+																stackId="builds"
+																fill="var(--color-running)"
+															/>
+														</BarChart>
+													</ChartContainer>
+												</CardContent>
+											</Card>
 
-										<Card className="bg-background">
-											<CardHeader>
-												<CardTitle>Success rate trend</CardTitle>
-												<CardDescription>
-													Percentage of successful completed builds in each time
-													bucket.
-												</CardDescription>
-											</CardHeader>
-											<CardContent>
-												<ChartContainer
-													config={successRateChartConfig}
-													className="h-72 w-full"
-												>
-													<AreaChart data={bucketRows}>
-														<CartesianGrid vertical={false} />
-														<XAxis
-															dataKey="label"
-															tickLine={false}
-															axisLine={false}
-															minTickGap={24}
-														/>
-														<YAxis
-															domain={[0, 100]}
-															tickFormatter={(value) => `${value}%`}
-															tickLine={false}
-															axisLine={false}
-														/>
-														<ChartTooltip
-															content={
-																<ChartTooltipContent
-																	labelKey="label"
-																	formatter={(value) => (
-																		<span className="font-mono font-medium text-foreground">
-																			{value == null ? "No data" : `${value}%`}
-																		</span>
-																	)}
-																/>
-															}
-														/>
-														<Area
-															type="monotone"
-															dataKey="successRatePercent"
-															stroke="var(--color-successRatePercent)"
-															fill="var(--color-successRatePercent)"
-															fillOpacity={0.18}
-														/>
-													</AreaChart>
-												</ChartContainer>
-											</CardContent>
-										</Card>
-									</div>
+											<Card className="bg-background">
+												<CardHeader>
+													<CardTitle>Success rate trend</CardTitle>
+													<CardDescription>
+														Percentage of successful completed builds in each
+														time bucket.
+													</CardDescription>
+												</CardHeader>
+												<CardContent>
+													<ChartContainer
+														config={successRateChartConfig}
+														className="h-72 w-full"
+													>
+														<AreaChart data={bucketRows}>
+															<CartesianGrid vertical={false} />
+															<XAxis
+																dataKey="label"
+																tickLine={false}
+																axisLine={false}
+																minTickGap={24}
+															/>
+															<YAxis
+																domain={[0, 100]}
+																tickFormatter={(value) => `${value}%`}
+																tickLine={false}
+																axisLine={false}
+															/>
+															<ChartTooltip
+																content={
+																	<ChartTooltipContent
+																		labelKey="label"
+																		formatter={(value) => (
+																			<span className="font-mono font-medium text-foreground">
+																				{value == null
+																					? "No data"
+																					: `${value}%`}
+																			</span>
+																		)}
+																	/>
+																}
+															/>
+															<Area
+																type="monotone"
+																dataKey="successRatePercent"
+																stroke="var(--color-successRatePercent)"
+																fill="var(--color-successRatePercent)"
+																fillOpacity={0.18}
+															/>
+														</AreaChart>
+													</ChartContainer>
+												</CardContent>
+											</Card>
+										</div>
+									)}
 								</CardContent>
 							</Card>
 
@@ -421,7 +457,11 @@ export function DetailsPanel({
 									</CardDescription>
 								</CardHeader>
 								<CardContent className="flex flex-col gap-3">
-									{buildRows.length ? (
+									{isLoadingJobAnalytics ? (
+										BUILD_ROW_SKELETON_KEYS.map((key) => (
+											<Skeleton key={key} className="h-24 w-full rounded-xl" />
+										))
+									) : buildRows.length ? (
 										buildRows.map((build) => (
 											<div
 												key={build.id}
