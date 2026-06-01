@@ -1,0 +1,27 @@
+electrobun.config.ts
+  s_a1126c2420afb4::t_f0d0c6f8b0436c 31-33
+scripts/set-macos-bun-options.mjs
+  s_a1126c2420afb4::t_b2f4eba653d54f 1-26,28-35
+  s_a1126c2420afb4::t_7ead0ef232aeb9 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "26af72c8709529304db9f40ae6e9647a73f2c857",
+  "prompts": {},
+  "humans": {
+    "h_bafa96d59b1234": {
+      "author": "PosiNorth <nofacer@outlook.com>"
+    }
+  },
+  "sessions": {
+    "s_a1126c2420afb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e8288-a068-7a81-a0ba-2e24e8cb7303",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
