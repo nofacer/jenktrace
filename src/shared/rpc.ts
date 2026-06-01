@@ -2,6 +2,8 @@ import type {
 	JenkinsConnectionTestInput,
 	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
+	JenkinsJobActivity,
+	JenkinsJobActivityInput,
 	JenkinsJobDetails,
 	JenkinsJobDetailsInput,
 	UpsertJenkinsInstanceInput,
@@ -33,6 +35,17 @@ export type AppRPCSchema = {
 			getJenkinsJobDetails: {
 				params: JenkinsJobDetailsInput;
 				response: JenkinsJobDetails;
+			};
+			getJenkinsJobActivity: {
+				params: JenkinsJobActivityInput;
+				response: JenkinsJobActivity;
+			};
+			runJenkinsMonitoringCycle: {
+				params: undefined;
+				response: {
+					processedJobs: number;
+					observedChanges: number;
+				};
 			};
 		};
 		messages: EmptyRPCMap;

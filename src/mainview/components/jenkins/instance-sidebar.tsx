@@ -47,7 +47,7 @@ export function InstanceSidebar({
 	onSelectJob: (job: string) => void;
 }) {
 	return (
-		<section className="flex min-w-0 flex-1">
+		<section className="flex min-w-0 shrink-0">
 			<aside className="flex w-22 flex-col items-center gap-3 border-r bg-muted/30 px-3 py-4">
 				<Button
 					size="icon-sm"

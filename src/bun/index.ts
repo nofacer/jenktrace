@@ -6,20 +6,25 @@ import {
 } from "electrobun/bun";
 import type {
 	JenkinsConnectionTestInput,
+	JenkinsJobActivityInput,
 	JenkinsJobDetailsInput,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
 import type { AppRPCSchema } from "../shared/rpc";
 import {
 	deleteJenkinsInstance,
+	getJenkinsJobActivity,
 	getJenkinsJobDetails,
 	listJenkinsInstances,
+	runJenkinsMonitoringCycle,
 	saveJenkinsInstance,
 	testJenkinsConnection,
 } from "./jenkins-store";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+const MONITORING_TICK_MS = 60_000;
+let monitoringRunInFlight = false;
 
 // Check if Vite dev server is running for HMR
 async function getMainViewUrl(): Promise<string> {
@@ -53,9 +58,33 @@ const appRpc = BrowserView.defineRPC<AppRPCSchema>({
 				testJenkinsConnection(params),
 			getJenkinsJobDetails: (params: JenkinsJobDetailsInput) =>
 				getJenkinsJobDetails(params),
+			getJenkinsJobActivity: (params: JenkinsJobActivityInput) =>
+				getJenkinsJobActivity(params),
+			runJenkinsMonitoringCycle: () => runJenkinsMonitoringCycle(),
 		},
 	},
 });
+
+async function runMonitoringTick() {
+	if (monitoringRunInFlight) {
+		return;
+	}
+
+	monitoringRunInFlight = true;
+
+	try {
+		const result = await runJenkinsMonitoringCycle();
+		if (result.processedJobs > 0) {
+			console.log(
+				`Monitoring tick processed ${result.processedJobs} jobs and observed ${result.observedChanges} changes.`,
+			);
+		}
+	} catch (error) {
+		console.error("Monitoring tick failed:", error);
+	} finally {
+		monitoringRunInFlight = false;
+	}
+}
 
 ApplicationMenu.setApplicationMenu([
 	{
@@ -100,3 +129,7 @@ new BrowserWindow({
 });
 
 console.log("React Tailwind Vite app started!");
+void runMonitoringTick();
+setInterval(() => {
+	void runMonitoringTick();
+}, MONITORING_TICK_MS);

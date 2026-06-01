@@ -218,6 +218,55 @@ export function InstanceDialog({
 						/>
 					</div>
 
+					<div className="grid gap-4 md:grid-cols-2">
+						<label
+							htmlFor="monitoringEnabled"
+							className="flex items-start gap-3 rounded-xl border bg-muted/20 px-4 py-3"
+						>
+							<input
+								id="monitoringEnabled"
+								type="checkbox"
+								className="mt-1 size-4"
+								checked={formState.monitoringEnabled}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										monitoringEnabled: event.target.checked,
+									}))
+								}
+							/>
+							<div className="space-y-1">
+								<p className="text-sm font-medium">Enable monitoring</p>
+								<p className="text-xs text-muted-foreground">
+									Periodically fetch the saved job list and store change
+									history.
+								</p>
+							</div>
+						</label>
+
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="pollIntervalMinutes">
+								Poll interval (minutes)
+							</Label>
+							<Input
+								id="pollIntervalMinutes"
+								type="number"
+								min="1"
+								max="1440"
+								step="1"
+								value={formState.pollIntervalMinutes}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										pollIntervalMinutes: event.target.value,
+									}))
+								}
+								disabled={!formState.monitoringEnabled}
+								placeholder="5"
+							/>
+						</div>
+					</div>
+
 					{errorMessage ? (
 						<Alert variant="destructive">
 							<AlertTitle>Save failed</AlertTitle>

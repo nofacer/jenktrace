@@ -5,6 +5,8 @@ export type JenkinsInstanceRecord = {
 	hostUrl: string;
 	username: string;
 	jobs: string[];
+	monitoringEnabled: boolean;
+	pollIntervalMinutes: number;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -57,11 +59,59 @@ export type JenkinsJobDetails = {
 	lastFailedBuild?: JenkinsJobBuildSummary | null;
 };
 
+export type JenkinsJobActivityInput = {
+	instanceId: JenkinsInstanceId;
+	fullProjectName: string;
+};
+
+export type JenkinsJobRuntimeSnapshot = {
+	instanceId: JenkinsInstanceId;
+	fullProjectName: string;
+	observedAt: string;
+	source: "poll" | "manual";
+	stateHash: string;
+	buildable: boolean | null;
+	inQueue: boolean | null;
+	color: string | null;
+	lastBuildNumber: number | null;
+	lastBuildResult: string | null;
+	lastBuildBuilding: boolean | null;
+	lastCompletedBuildNumber: number | null;
+	lastCompletedBuildResult: string | null;
+	lastSuccessfulBuildNumber: number | null;
+	lastFailedBuildNumber: number | null;
+	message: string | null;
+};
+
+export type JenkinsJobHistoryEntry = JenkinsJobRuntimeSnapshot & {
+	id: number;
+};
+
+export type JenkinsJobLogEntry = {
+	id: number;
+	instanceId: JenkinsInstanceId;
+	fullProjectName: string | null;
+	level: "info" | "warn" | "error";
+	code: string;
+	message: string;
+	firstSeenAt: string;
+	lastSeenAt: string;
+	repeatCount: number;
+};
+
+export type JenkinsJobActivity = {
+	snapshot: JenkinsJobRuntimeSnapshot | null;
+	history: JenkinsJobHistoryEntry[];
+	logs: JenkinsJobLogEntry[];
+};
+
 export type UpsertJenkinsInstanceInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
 	jobs?: string[];
+	monitoringEnabled?: boolean;
+	pollIntervalMinutes?: number;
 	apiKey?: string;
 };
 
@@ -142,6 +192,12 @@ export function validateJobDetailsInput(
 	};
 }
 
+export function validateJobActivityInput(
+	input: JenkinsJobActivityInput,
+): JenkinsJobActivityInput {
+	return validateJobDetailsInput(input);
+}
+
 export function normalizeHostUrl(value: string): string {
 	const trimmed = value.trim();
 	const url = new URL(trimmed);
@@ -157,6 +213,10 @@ export function validateInstanceInput(
 	const hostUrl = normalizeHostUrl(input.hostUrl);
 	const username = input.username.trim();
 	const jobs = input.jobs ? normalizeJobNames(input.jobs) : undefined;
+	const monitoringEnabled = input.monitoringEnabled ?? true;
+	const pollIntervalMinutes = normalizePollIntervalMinutes(
+		input.pollIntervalMinutes,
+	);
 
 	if (!hostUrl) {
 		throw new Error("Host URL is required.");
@@ -171,6 +231,16 @@ export function validateInstanceInput(
 		hostUrl,
 		username,
 		jobs,
+		monitoringEnabled,
+		pollIntervalMinutes,
 		apiKey: input.apiKey?.trim(),
 	};
+}
+
+export function normalizePollIntervalMinutes(value?: number): number {
+	if (value == null || Number.isNaN(value)) {
+		return 5;
+	}
+
+	return Math.min(1440, Math.max(1, Math.round(value)));
 }

@@ -8,6 +8,8 @@ export type InstanceFormState = {
 	hostUrl: string;
 	username: string;
 	apiKey: string;
+	monitoringEnabled: boolean;
+	pollIntervalMinutes: string;
 };
 
 export type JobFormState = {
@@ -22,6 +24,8 @@ export const EMPTY_FORM: InstanceFormState = {
 	hostUrl: "",
 	username: "",
 	apiKey: "",
+	monitoringEnabled: true,
+	pollIntervalMinutes: "5",
 };
 
 export const EMPTY_JOB_FORM: JobFormState = {
@@ -40,6 +44,8 @@ export function buildFormState(
 		hostUrl: instance.hostUrl,
 		username: instance.username,
 		apiKey: "",
+		monitoringEnabled: instance.monitoringEnabled,
+		pollIntervalMinutes: String(instance.pollIntervalMinutes),
 	};
 }
 

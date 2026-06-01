@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type {
 	JenkinsInstanceSummary,
+	JenkinsJobActivity,
 	JenkinsJobDetails,
 } from "../../../shared/jenkins";
 import {
@@ -26,7 +27,9 @@ export function DetailsPanel({
 	selectedInstance,
 	selectedJob,
 	jobDetails,
+	jobActivity,
 	jobDetailsError,
+	jobActivityError,
 	isLoadingJobDetails,
 	isDeletingJob,
 	onRefreshJob,
@@ -36,7 +39,9 @@ export function DetailsPanel({
 	selectedInstance: JenkinsInstanceSummary | null;
 	selectedJob: string | null;
 	jobDetails: JenkinsJobDetails | null;
+	jobActivity: JenkinsJobActivity | null;
 	jobDetailsError: string | null;
+	jobActivityError: string | null;
 	isLoadingJobDetails: boolean;
 	isDeletingJob: boolean;
 	onRefreshJob: () => void;
@@ -179,6 +184,16 @@ export function DetailsPanel({
 								}
 							/>
 							<InfoTile
+								label="Monitoring"
+								value={
+									selectedInstance
+										? selectedInstance.monitoringEnabled
+											? `Every ${selectedInstance.pollIntervalMinutes} min`
+											: "Disabled"
+										: "Not selected"
+								}
+							/>
+							<InfoTile
 								label="Last updated"
 								value={
 									selectedInstance
@@ -211,6 +226,13 @@ export function DetailsPanel({
 							<Alert variant="destructive">
 								<AlertTitle>Unable to load job details</AlertTitle>
 								<AlertDescription>{jobDetailsError}</AlertDescription>
+							</Alert>
+						) : null}
+
+						{jobActivityError ? (
+							<Alert variant="destructive">
+								<AlertTitle>Unable to load job activity</AlertTitle>
+								<AlertDescription>{jobActivityError}</AlertDescription>
 							</Alert>
 						) : null}
 
@@ -265,6 +287,126 @@ export function DetailsPanel({
 												? jobDetails.description
 												: "No description is set for this Jenkins job."}
 										</p>
+									</CardContent>
+								</Card>
+								<Card className="xl:col-span-2">
+									<CardHeader>
+										<CardTitle>Observed state</CardTitle>
+										<CardDescription>
+											Last persisted monitoring snapshot for this job.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+										<InfoTile
+											label="Observed at"
+											value={
+												jobActivity?.snapshot?.observedAt
+													? new Date(
+															jobActivity.snapshot.observedAt,
+														).toLocaleString()
+													: "Not observed yet"
+											}
+										/>
+										<InfoTile
+											label="Source"
+											value={jobActivity?.snapshot?.source ?? "None"}
+										/>
+										<InfoTile
+											label="Last build"
+											value={
+												jobActivity?.snapshot?.lastBuildNumber != null
+													? `#${jobActivity.snapshot.lastBuildNumber}`
+													: "None"
+											}
+										/>
+										<InfoTile
+											label="Result"
+											value={
+												jobActivity?.snapshot?.lastBuildBuilding
+													? "Building"
+													: (jobActivity?.snapshot?.lastBuildResult ??
+														"Unknown")
+											}
+										/>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader>
+										<CardTitle>Recent history</CardTitle>
+										<CardDescription>
+											Only status changes are persisted to avoid duplicate rows.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="space-y-3">
+										{jobActivity?.history.length ? (
+											jobActivity.history.map((entry) => (
+												<div
+													key={entry.id}
+													className="rounded-xl border bg-muted/20 px-4 py-3"
+												>
+													<div className="flex items-center justify-between gap-3">
+														<p className="text-sm font-medium">
+															{entry.lastBuildNumber != null
+																? `Build #${entry.lastBuildNumber}`
+																: "No build"}
+														</p>
+														<p className="text-xs text-muted-foreground">
+															{new Date(entry.observedAt).toLocaleString()}
+														</p>
+													</div>
+													<p className="mt-1 text-xs text-muted-foreground">
+														{entry.lastBuildBuilding
+															? "Building"
+															: (entry.lastBuildResult ?? "Unknown")}
+														{" · "}
+														{entry.color ?? "No color"}
+														{" · "}
+														{entry.inQueue ? "Queued" : "Idle"}
+													</p>
+												</div>
+											))
+										) : (
+											<p className="text-sm text-muted-foreground">
+												No persisted changes yet.
+											</p>
+										)}
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader>
+										<CardTitle>Recent logs</CardTitle>
+										<CardDescription>
+											Repeated events are compacted instead of being appended on
+											every poll.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="space-y-3">
+										{jobActivity?.logs.length ? (
+											jobActivity.logs.map((entry) => (
+												<div
+													key={entry.id}
+													className="rounded-xl border bg-muted/20 px-4 py-3"
+												>
+													<div className="flex items-center justify-between gap-3">
+														<p className="text-sm font-medium">
+															{entry.level.toUpperCase()} · {entry.code}
+														</p>
+														<p className="text-xs text-muted-foreground">
+															{new Date(entry.lastSeenAt).toLocaleString()}
+														</p>
+													</div>
+													<p className="mt-1 text-sm">{entry.message}</p>
+													<p className="mt-1 text-xs text-muted-foreground">
+														Seen {entry.repeatCount} time
+														{entry.repeatCount === 1 ? "" : "s"}
+													</p>
+												</div>
+											))
+										) : (
+											<p className="text-sm text-muted-foreground">
+												No logs recorded yet.
+											</p>
+										)}
 									</CardContent>
 								</Card>
 							</div>

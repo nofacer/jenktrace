@@ -18,6 +18,7 @@ import { appRpc } from "@/lib/app-rpc";
 import type {
 	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
+	JenkinsJobActivity,
 	JenkinsJobDetails,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
@@ -53,12 +54,16 @@ export default function App() {
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [jobErrorMessage, setJobErrorMessage] = useState<string | null>(null);
 	const [jobDetailsError, setJobDetailsError] = useState<string | null>(null);
+	const [jobActivityError, setJobActivityError] = useState<string | null>(null);
 	const [deleteJobErrorMessage, setDeleteJobErrorMessage] = useState<
 		string | null
 	>(null);
 	const [testResult, setTestResult] =
 		useState<JenkinsConnectionTestResult | null>(null);
 	const [jobDetails, setJobDetails] = useState<JenkinsJobDetails | null>(null);
+	const [jobActivity, setJobActivity] = useState<JenkinsJobActivity | null>(
+		null,
+	);
 
 	const selectedInstance = useMemo(
 		() =>
@@ -104,6 +109,8 @@ export default function App() {
 		if (!selectedInstance || !selectedJob) {
 			setJobDetails(null);
 			setJobDetailsError(null);
+			setJobActivity(null);
+			setJobActivityError(null);
 			setIsLoadingJobDetails(false);
 			return;
 		}
@@ -113,23 +120,35 @@ export default function App() {
 		const run = async () => {
 			setIsLoadingJobDetails(true);
 			setJobDetailsError(null);
+			setJobActivityError(null);
 
 			try {
-				const nextDetails = await appRpc.proxy.request.getJenkinsJobDetails({
-					instanceId: selectedInstance.id,
-					fullProjectName: selectedJob,
-				});
+				const [nextDetails, nextActivity] = await Promise.all([
+					appRpc.proxy.request.getJenkinsJobDetails({
+						instanceId: selectedInstance.id,
+						fullProjectName: selectedJob,
+					}),
+					appRpc.proxy.request.getJenkinsJobActivity({
+						instanceId: selectedInstance.id,
+						fullProjectName: selectedJob,
+					}),
+				]);
 
 				if (!isCancelled) {
 					setJobDetails(nextDetails);
+					setJobActivity(nextActivity);
 				}
 			} catch (error) {
 				if (!isCancelled) {
 					setJobDetails(null);
+					setJobActivity(null);
 					setJobDetailsError(
 						error instanceof Error
 							? error.message
 							: "Failed to load Jenkins job details.",
+					);
+					setJobActivityError(
+						error instanceof Error ? error.message : "Failed to load activity.",
 					);
 				}
 			} finally {
@@ -215,6 +234,8 @@ export default function App() {
 				id: instanceFormState.id,
 				hostUrl: instanceFormState.hostUrl,
 				username: instanceFormState.username,
+				monitoringEnabled: instanceFormState.monitoringEnabled,
+				pollIntervalMinutes: Number(instanceFormState.pollIntervalMinutes),
 				apiKey: instanceFormState.apiKey || undefined,
 			};
 
@@ -347,19 +368,31 @@ export default function App() {
 
 		setIsLoadingJobDetails(true);
 		setJobDetailsError(null);
+		setJobActivityError(null);
 
 		try {
-			const nextDetails = await appRpc.proxy.request.getJenkinsJobDetails({
-				instanceId: selectedInstance.id,
-				fullProjectName: selectedJob,
-			});
+			const [nextDetails, nextActivity] = await Promise.all([
+				appRpc.proxy.request.getJenkinsJobDetails({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+				}),
+				appRpc.proxy.request.getJenkinsJobActivity({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+				}),
+			]);
 			setJobDetails(nextDetails);
+			setJobActivity(nextActivity);
 		} catch (error) {
 			setJobDetails(null);
+			setJobActivity(null);
 			setJobDetailsError(
 				error instanceof Error
 					? error.message
 					: "Failed to load Jenkins job details.",
+			);
+			setJobActivityError(
+				error instanceof Error ? error.message : "Failed to load activity.",
 			);
 		} finally {
 			setIsLoadingJobDetails(false);
@@ -392,6 +425,8 @@ export default function App() {
 			setSelectedJob(nextSelectedJob);
 			setJobDetails(null);
 			setJobDetailsError(null);
+			setJobActivity(null);
+			setJobActivityError(null);
 			setIsDeleteJobDialogOpen(false);
 		} catch (error) {
 			setDeleteJobErrorMessage(
@@ -424,7 +459,9 @@ export default function App() {
 					selectedInstance={selectedInstance}
 					selectedJob={selectedJob}
 					jobDetails={jobDetails}
+					jobActivity={jobActivity}
 					jobDetailsError={jobDetailsError}
+					jobActivityError={jobActivityError}
 					isLoadingJobDetails={isLoadingJobDetails}
 					isDeletingJob={isDeletingJob}
 					onRefreshJob={refreshSelectedJob}
