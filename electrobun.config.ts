@@ -16,7 +16,8 @@ export default {
 		watchIgnore: ["dist/**"],
 		mac: {
 			bundleCEF: false,
-			createDmg: false,
+			createDmg: true,
+			icons: "icon.iconset",
 		},
 		linux: {
 			bundleCEF: false,

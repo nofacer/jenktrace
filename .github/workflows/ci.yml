@@ -11,7 +11,7 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     if: github.event_name == 'pull_request' || github.ref_type != 'tag'
 
     steps:
@@ -54,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.ref_name }}-artifacts
-          path: artifacts/*
+          path: artifacts/*.dmg
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -63,6 +63,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           files: |
-            artifacts/*
+            artifacts/*.dmg
           fail_on_unmatched_files: true
           generate_release_notes: true

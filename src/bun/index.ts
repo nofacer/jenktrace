@@ -1,10 +1,6 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-	ApplicationMenu,
-	BrowserView,
-	BrowserWindow,
-	Updater,
-} from "electrobun/bun";
+import { ApplicationMenu, BrowserView, BrowserWindow } from "electrobun/bun";
 import type {
 	JenkinsBuildLogInput,
 	JenkinsConnectionTestInput,
@@ -14,7 +10,7 @@ import type {
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
 import type { AppRPCSchema } from "../shared/rpc";
-import { native } from "./electrobun-native";
+import { native, toCString } from "./electrobun-native";
 import {
 	deleteJenkinsInstance,
 	getJenkinsBuildLog,
@@ -26,6 +22,7 @@ import {
 	saveJenkinsInstance,
 	testJenkinsConnection,
 } from "./jenkins-store";
+import { getAppRuntimeInfo } from "./runtime-paths";
 
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
@@ -35,7 +32,7 @@ let monitoringRunInFlight = false;
 
 // Check if Vite dev server is running for HMR
 async function getMainViewUrl(): Promise<string> {
-	const channel = await Updater.localInfo.channel();
+	const channel = getAppRuntimeInfo().channel;
 	if (channel === "dev") {
 		try {
 			await fetch(DEV_SERVER_URL, { method: "HEAD" });
@@ -139,7 +136,9 @@ const mainWindow = new BrowserWindow({
 	},
 });
 
-native?.symbols.setWindowIcon(mainWindow.ptr, APP_ICON_PATH);
+if (existsSync(APP_ICON_PATH)) {
+	native?.symbols.setWindowIcon(mainWindow.ptr, toCString(APP_ICON_PATH));
+}
 
 console.log("jenktrace app started!");
 void runMonitoringTick();
