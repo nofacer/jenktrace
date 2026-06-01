@@ -1,9 +1,7 @@
 import { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-
-import { Utils } from "electrobun/bun";
 
 import {
 	buildJenkinsJobUrl,
@@ -40,8 +38,9 @@ import {
 	validateJobAnalyticsInput,
 	validateJobDetailsInput,
 } from "../shared/jenkins";
+import { getAppUserDataDir } from "./runtime-paths";
 
-const CONFIG_DIR = join(Utils.paths.userData, "config");
+const CONFIG_DIR = join(getAppUserDataDir(), "config");
 const CONFIG_PATH = join(CONFIG_DIR, "jenkins-instances.json");
 const RUNTIME_DB_PATH = join(CONFIG_DIR, "jenkins-runtime.sqlite");
 const KEYCHAIN_SERVICE_PREFIX = "dev.electrobun.jenktrace.jenkins-instance";
@@ -110,6 +109,12 @@ type RuntimeBuildLogRow = {
 	content: string;
 	updated_at: string;
 };
+
+function ensureRuntimeDbDirSync() {
+	mkdirSync(CONFIG_DIR, { recursive: true });
+}
+
+ensureRuntimeDbDirSync();
 
 const runtimeDb = new Database(RUNTIME_DB_PATH);
 
