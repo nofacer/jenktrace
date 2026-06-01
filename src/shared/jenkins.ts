@@ -4,6 +4,7 @@ export type JenkinsInstanceRecord = {
 	id: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
+	disableSslVerification: boolean;
 	jobs: string[];
 	jobRetentionDays: Record<string, number>;
 	jobMaxBuilds: Record<string, number>;
@@ -23,6 +24,7 @@ export type JenkinsConnectionTestInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
+	disableSslVerification?: boolean;
 	apiKey?: string;
 };
 
@@ -164,6 +166,7 @@ export type UpsertJenkinsInstanceInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
+	disableSslVerification?: boolean;
 	jobs?: string[];
 	jobRetentionDays?: Record<string, number>;
 	jobMaxBuilds?: Record<string, number>;
@@ -213,6 +216,7 @@ export function validateConnectionTestInput(
 ): JenkinsConnectionTestInput {
 	const hostUrl = normalizeHostUrl(input.hostUrl);
 	const username = input.username.trim();
+	const disableSslVerification = input.disableSslVerification ?? false;
 
 	if (!hostUrl) {
 		throw new Error("Host URL is required.");
@@ -226,6 +230,7 @@ export function validateConnectionTestInput(
 		...input,
 		hostUrl,
 		username,
+		disableSslVerification,
 		apiKey: input.apiKey?.trim(),
 	};
 }
@@ -288,6 +293,7 @@ export function validateInstanceInput(
 ): UpsertJenkinsInstanceInput {
 	const hostUrl = normalizeHostUrl(input.hostUrl);
 	const username = input.username.trim();
+	const disableSslVerification = input.disableSslVerification ?? false;
 	const jobs = input.jobs ? normalizeJobNames(input.jobs) : undefined;
 	const jobRetentionDays = normalizeJobRetentionDays(
 		input.jobRetentionDays,
@@ -315,6 +321,7 @@ export function validateInstanceInput(
 		...input,
 		hostUrl,
 		username,
+		disableSslVerification,
 		jobs,
 		jobRetentionDays,
 		jobMaxBuilds,

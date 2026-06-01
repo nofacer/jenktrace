@@ -268,6 +268,7 @@ export default function App() {
 				id: instanceFormState.id,
 				hostUrl: instanceFormState.hostUrl,
 				username: instanceFormState.username,
+				disableSslVerification: instanceFormState.disableSslVerification,
 				monitoringEnabled: instanceFormState.monitoringEnabled,
 				pollIntervalMinutes: Number(instanceFormState.pollIntervalMinutes),
 				apiKey: instanceFormState.apiKey || undefined,
@@ -331,6 +332,7 @@ export default function App() {
 				id: instanceFormState.id,
 				hostUrl: instanceFormState.hostUrl,
 				username: instanceFormState.username,
+				disableSslVerification: instanceFormState.disableSslVerification,
 				apiKey: instanceFormState.apiKey || undefined,
 			});
 			setTestResult(result);
@@ -412,6 +414,7 @@ export default function App() {
 				id: selectedInstance.id,
 				hostUrl: selectedInstance.hostUrl,
 				username: selectedInstance.username,
+				disableSslVerification: selectedInstance.disableSslVerification,
 				jobs: nextJobs,
 				jobRetentionDays: nextRetentionDays,
 				jobMaxBuilds: nextMaxBuilds,
@@ -508,6 +511,7 @@ export default function App() {
 				id: selectedInstance.id,
 				hostUrl: selectedInstance.hostUrl,
 				username: selectedInstance.username,
+				disableSslVerification: selectedInstance.disableSslVerification,
 				jobs: nextJobs,
 				jobRetentionDays: nextRetentionDays,
 				jobMaxBuilds: nextMaxBuilds,

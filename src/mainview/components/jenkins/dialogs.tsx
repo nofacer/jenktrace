@@ -220,6 +220,30 @@ export function InstanceDialog({
 
 					<div className="grid gap-4 md:grid-cols-2">
 						<label
+							htmlFor="disableSslVerification"
+							className="flex items-start gap-3 rounded-xl border bg-muted/20 px-4 py-3"
+						>
+							<input
+								id="disableSslVerification"
+								type="checkbox"
+								className="mt-1 size-4"
+								checked={formState.disableSslVerification}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										disableSslVerification: event.target.checked,
+									}))
+								}
+							/>
+							<div className="space-y-1">
+								<p className="text-sm font-medium">Disable SSL verification</p>
+								<p className="text-xs text-muted-foreground">
+									Allow self-signed or otherwise untrusted HTTPS certificates.
+								</p>
+							</div>
+						</label>
+
+						<label
 							htmlFor="monitoringEnabled"
 							className="flex items-start gap-3 rounded-xl border bg-muted/20 px-4 py-3"
 						>
