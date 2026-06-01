@@ -1,0 +1,19 @@
+src/mainview/index.html
+  s_67f9ea0f56b446::t_7b15ec47cc75b6 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "91f1ea8957a893c47295123966c201d91a207580",
+  "prompts": {},
+  "sessions": {
+    "s_67f9ea0f56b446": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e81ff-a90a-7740-8fb4-2c462f1f3d4d",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
