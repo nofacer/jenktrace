@@ -1,0 +1,23 @@
+electrobun.config.ts
+  s_4e5824590705a0::t_4cace1a8009905 7
+package.json
+  s_4e5824590705a0::t_4cace1a8009905 3
+docs/release-notes/v1.0.2.md
+  s_4e5824590705a0::t_4cace1a8009905 1-20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1f4d796a56df21a20bc92ecdd0171c728cd6e0a7",
+  "prompts": {},
+  "sessions": {
+    "s_4e5824590705a0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e82ae-0e00-7723-bc2d-319f79511d17",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
