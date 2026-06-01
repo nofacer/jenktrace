@@ -1,0 +1,14 @@
+AGENT.md
+  h_bafa96d59b1234 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8559af24afb6bb4f18d9b99fdeba32e374402d19",
+  "prompts": {},
+  "humans": {
+    "h_bafa96d59b1234": {
+      "author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
