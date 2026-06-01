@@ -1,6 +1,6 @@
 {
 	"name": "jenktrace",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "jenktrace desktop app",
 	"scripts": {
 		"prepare": "husky",
