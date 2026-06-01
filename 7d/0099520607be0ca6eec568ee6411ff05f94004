@@ -1,0 +1,50 @@
+src/mainview/App.tsx
+  s_16dc35c56d0feb::t_42640d317780c8 57,112-113,123,126-135,139,144,150-152,237-238,371,374-383,385,388,394-396,428-429,462,464
+  s_16dc35c56d0feb::t_eb45c13c1a54dc 21,64-66
+src/mainview/components/jenkins/instance-sidebar.tsx
+  s_16dc35c56d0feb::t_f690c763f866b9 50
+src/bun/jenkins-store.ts
+  s_16dc35c56d0feb::t_e8c4570bad47aa 724-729,737-739,758-762,766-775,800
+  s_16dc35c56d0feb::t_7bb46b9e090c77 214-265,269-303,306-354,375-408,429-442,448-474,476-490,500-505,507-509,511-513,515-518,528-529
+  s_16dc35c56d0feb::t_05088b96bbfbf1 972-983
+  s_16dc35c56d0feb::t_b2778ccf87a582 1040-1074,1076-1080,1091-1096,1101-1148
+  s_16dc35c56d0feb::t_f445f128715bad 879-881,889,942-943,945
+  s_16dc35c56d0feb::t_eb45c13c1a54dc 1,14-15,19-21,26,137-140,162-165,190-193,266-268,304-305,1083-1084,1097-1100
+  s_16dc35c56d0feb::t_306f127277b31e 1075,1081-1082,1085-1090
+  s_16dc35c56d0feb::t_c7544457e88ca9 519-527
+  s_16dc35c56d0feb::t_2b6e17273e2a6f 36,546-549
+  s_16dc35c56d0feb::t_99ffe8b1d27666 443-447
+  s_16dc35c56d0feb::t_60e83d40f0b80a 355-374,409-428,475,491-499,506,510,514
+  s_16dc35c56d0feb::t_8435413477c759 22,32,34-35,42-136,141-161,166-189,194-208
+  s_16dc35c56d0feb::t_e4dea97a54f616 560-586
+src/mainview/components/jenkins/details-panel.tsx
+  s_16dc35c56d0feb::t_eb45c13c1a54dc 17,327-328,379-380
+  s_16dc35c56d0feb::t_4fa9ebe7be5cf6 30,32,42,44,186-195,232-238,292-326,329-378,381-409
+src/shared/rpc.ts
+  s_16dc35c56d0feb::t_9d5fc8e16ca72a 5-6,39-48
+src/bun/index.ts
+  s_16dc35c56d0feb::t_2ad6973004e31d 9,16,19,26-27,61-63,68-88,132-135
+src/shared/jenkins.ts
+  s_16dc35c56d0feb::t_ae377421b06aa1 8-9,62-107,113-114,195-200,216-219,234-235,239-245
+src/mainview/components/jenkins/types.ts
+  s_16dc35c56d0feb::t_edac4c8ae55555 11-12,27-28,47-48
+src/mainview/components/jenkins/dialogs.tsx
+  s_16dc35c56d0feb::t_eb45c13c1a54dc 241-242
+  s_16dc35c56d0feb::t_acdd0fa006358b 221-240,243-269
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7d0099520607be0ca6eec568ee6411ff05f94004",
+  "prompts": {},
+  "sessions": {
+    "s_16dc35c56d0feb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e81b1-11fe-7343-8280-70f418756edf",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
