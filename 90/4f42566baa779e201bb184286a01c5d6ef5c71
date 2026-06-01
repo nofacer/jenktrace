@@ -1,0 +1,19 @@
+docs/release-notes/v1.0.0.md
+  s_67f9ea0f56b446::t_b09a52ef4c54f2 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "904f42566baa779e201bb184286a01c5d6ef5c71",
+  "prompts": {},
+  "sessions": {
+    "s_67f9ea0f56b446": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e81ff-a90a-7740-8fb4-2c462f1f3d4d",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
