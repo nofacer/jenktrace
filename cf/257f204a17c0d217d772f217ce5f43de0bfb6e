@@ -1,0 +1,59 @@
+src/mainview/components/jenkins/details-panel.tsx
+  s_16dc35c56d0feb::t_92e9325ce41e21 155-157,499-500
+  s_16dc35c56d0feb::t_5eadc5a9647746 22,452-454,456-458
+  s_16dc35c56d0feb::t_6a5a7aa6ea2b47 9,36-42,46,49,121-125,136-154,158-163,455,473-498,501-505
+src/bun/jenkins-store.ts
+  s_16dc35c56d0feb::t_eefc29857dbc02 1361-1378,1380-1427
+  s_16dc35c56d0feb::t_024c1b0f6a7751 1776-1801,1803-1807
+  s_16dc35c56d0feb::t_0a2ba8dec433a1 1679-1713
+  s_16dc35c56d0feb::t_73c0eb812c4c36 10-11,106-113,187-194,290-301
+  s_16dc35c56d0feb::t_a224912593b444 31,989-991,1011-1016,1756-1775,1802
+  s_16dc35c56d0feb::t_5ff7ce44229731 377-386,543-562
+  s_16dc35c56d0feb::t_f99c1aef32dfc6 797-804
+  s_16dc35c56d0feb::t_af81147b9d53d6 745-748,764
+  s_16dc35c56d0feb::t_b49627ed653dce 36,1379
+  s_16dc35c56d0feb::t_b129ce476b1497 793-796,1753-1755
+src/shared/jenkins.ts
+  s_16dc35c56d0feb::t_1975a3a6776fc9 408,414
+  s_16dc35c56d0feb::t_abec3e64d9d7fd 50-51
+  s_16dc35c56d0feb::t_b129ce476b1497 10,170
+  s_16dc35c56d0feb::t_b9103216641433 11
+  s_16dc35c56d0feb::t_858ec902f2f267 299-300,403,406,415-420
+  s_16dc35c56d0feb::t_271613b5362bf6 297-298,321
+  s_16dc35c56d0feb::t_4dc5f72f05c36c 404-405,407,409-413,421-431
+  s_16dc35c56d0feb::t_d03a645531f80b 46-49,155-160,268-274
+src/mainview/components/jenkins/types.ts
+  s_16dc35c56d0feb::t_888d1a021be191 20-21,39-40,64,75-76
+src/mainview/components/jenkins/dialogs.tsx
+  s_16dc35c56d0feb::t_78dc01bc5c6d3a 407,409,412-413,461
+  s_16dc35c56d0feb::t_61700dc085fb8d 406,408,410-411,414-460
+src/shared/rpc.ts
+  s_16dc35c56d0feb::t_211813bfa067fa 2-3,51-53
+src/mainview/App.tsx
+  s_16dc35c56d0feb::t_91c3f75d6b3281 244-246,389,393
+  s_16dc35c56d0feb::t_c42edd5f90f222 385-388
+  s_16dc35c56d0feb::t_b129ce476b1497 390-392,394-396,401,418,497-499,502,514
+  s_16dc35c56d0feb::t_13b34493a489ab 406-409
+src/mainview/components/jenkins/instance-sidebar.tsx
+  s_16dc35c56d0feb::t_a2c60fd2cc24b1 220
+  s_16dc35c56d0feb::t_11b25e917a1efb 221-223,252,256-266
+  s_16dc35c56d0feb::t_b129ce476b1497 253-255
+src/bun/index.ts
+  s_16dc35c56d0feb::t_d52f4b3291fde9 8,18,69-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "cf257f204a17c0d217d772f217ce5f43de0bfb6e",
+  "prompts": {},
+  "sessions": {
+    "s_16dc35c56d0feb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e81b1-11fe-7343-8280-70f418756edf",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
