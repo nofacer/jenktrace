@@ -28,4 +28,7 @@ export default {
 			icon: "assets/icon-1024.png",
 		},
 	},
+	scripts: {
+		postWrap: "scripts/set-macos-bun-options.mjs",
+	},
 } satisfies ElectrobunConfig;
