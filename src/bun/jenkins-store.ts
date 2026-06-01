@@ -13,17 +13,27 @@ import {
 	type JenkinsInstanceSummary,
 	type JenkinsJobActivity,
 	type JenkinsJobActivityInput,
+	type JenkinsJobAnalytics,
+	type JenkinsJobAnalyticsInput,
+	type JenkinsJobBuildBucket,
+	type JenkinsJobBuildRecord,
 	type JenkinsJobBuildSummary,
 	type JenkinsJobDetails,
 	type JenkinsJobDetailsInput,
 	type JenkinsJobHistoryEntry,
 	type JenkinsJobLogEntry,
 	type JenkinsJobRuntimeSnapshot,
+	normalizeBuildTimeRange,
+	normalizeJobMaxBuilds,
+	normalizeJobMaxBuildsValue,
+	normalizeJobRetentionDays,
+	normalizeJobRetentionDaysValue,
 	normalizePollIntervalMinutes,
 	type UpsertJenkinsInstanceInput,
 	validateConnectionTestInput,
 	validateInstanceInput,
 	validateJobActivityInput,
+	validateJobAnalyticsInput,
 	validateJobDetailsInput,
 } from "../shared/jenkins";
 
@@ -33,6 +43,8 @@ const RUNTIME_DB_PATH = join(CONFIG_DIR, "jenkins-runtime.sqlite");
 const KEYCHAIN_SERVICE_PREFIX = "dev.electrobun.jenktrace.jenkins-instance";
 const DEFAULT_HISTORY_LIMIT = 20;
 const DEFAULT_LOG_LIMIT = 30;
+const DEFAULT_JOB_RETENTION_DAYS = 90;
+const DEFAULT_JOB_MAX_BUILDS = 1000;
 const lastPolledAtByInstance = new Map<string, number>();
 
 type StoredConfig = {
@@ -72,6 +84,19 @@ type RuntimeLogRow = {
 	first_seen_at: string;
 	last_seen_at: string;
 	repeat_count: number;
+};
+
+type RuntimeBuildRow = {
+	instance_id: string;
+	full_project_name: string;
+	build_number: number;
+	url: string;
+	result: string | null;
+	building: number;
+	timestamp: number | null;
+	duration: number | null;
+	display_name: string | null;
+	updated_at: string;
 };
 
 const runtimeDb = new Database(RUNTIME_DB_PATH);
@@ -132,6 +157,21 @@ runtimeDb.exec(`
 	);
 	CREATE INDEX IF NOT EXISTS idx_job_runtime_log_lookup
 		ON job_runtime_log (instance_id, full_project_name, last_seen_at DESC);
+	CREATE TABLE IF NOT EXISTS job_runtime_build (
+		instance_id TEXT NOT NULL,
+		full_project_name TEXT NOT NULL,
+		build_number INTEGER NOT NULL,
+		url TEXT NOT NULL,
+		result TEXT,
+		building INTEGER NOT NULL,
+		timestamp INTEGER,
+		duration INTEGER,
+		display_name TEXT,
+		updated_at TEXT NOT NULL,
+		PRIMARY KEY (instance_id, full_project_name, build_number)
+	);
+	CREATE INDEX IF NOT EXISTS idx_job_runtime_build_lookup
+		ON job_runtime_build (instance_id, full_project_name, timestamp DESC, build_number DESC);
 `);
 
 const selectSnapshotStatement = runtimeDb.query<
@@ -207,6 +247,26 @@ const selectLogsStatement = runtimeDb.query<
 	LIMIT ?
 `);
 
+const selectBuildsSinceStatement = runtimeDb.query<
+	RuntimeBuildRow,
+	[string, string, number]
+>(`
+	SELECT
+		instance_id,
+		full_project_name,
+		build_number,
+		url,
+		result,
+		building,
+		timestamp,
+		duration,
+		display_name,
+		updated_at
+	FROM job_runtime_build
+	WHERE instance_id = ? AND full_project_name = ? AND COALESCE(timestamp, 0) >= ?
+	ORDER BY COALESCE(timestamp, 0) DESC, build_number DESC
+`);
+
 function keychainServiceName(instanceId: string): string {
 	return `${KEYCHAIN_SERVICE_PREFIX}.${instanceId}`;
 }
@@ -260,6 +320,23 @@ function mapLogRow(row: RuntimeLogRow): JenkinsJobLogEntry {
 		firstSeenAt: row.first_seen_at,
 		lastSeenAt: row.last_seen_at,
 		repeatCount: row.repeat_count,
+	};
+}
+
+function mapBuildRow(row: RuntimeBuildRow): JenkinsJobBuildRecord {
+	return {
+		id: `${row.build_number}`,
+		number: row.build_number,
+		url: row.url,
+		result: row.result,
+		building: Boolean(row.building),
+		timestamp: row.timestamp ?? undefined,
+		duration: row.duration ?? undefined,
+		displayName: row.display_name ?? undefined,
+		resultCategory: getResultCategory({
+			building: Boolean(row.building),
+			result: row.result,
+		}),
 	};
 }
 
@@ -373,6 +450,88 @@ function persistSnapshot(snapshot: JenkinsJobRuntimeSnapshot) {
 			snapshot.message,
 		],
 	);
+}
+
+function persistBuilds(
+	instanceId: string,
+	fullProjectName: string,
+	builds: JenkinsJobBuildRecord[],
+	updatedAt: string,
+) {
+	for (const build of builds) {
+		runtimeDb.run(
+			`INSERT INTO job_runtime_build (
+				instance_id,
+				full_project_name,
+				build_number,
+				url,
+				result,
+				building,
+				timestamp,
+				duration,
+				display_name,
+				updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(instance_id, full_project_name, build_number) DO UPDATE SET
+				url = excluded.url,
+				result = excluded.result,
+				building = excluded.building,
+				timestamp = excluded.timestamp,
+				duration = excluded.duration,
+				display_name = excluded.display_name,
+				updated_at = excluded.updated_at`,
+			[
+				instanceId,
+				fullProjectName,
+				build.number,
+				build.url,
+				build.result ?? null,
+				Number(build.building),
+				build.timestamp ?? null,
+				build.duration ?? null,
+				build.displayName ?? null,
+				updatedAt,
+			],
+		);
+	}
+}
+
+function pruneBuildsForJob(
+	instanceId: string,
+	fullProjectName: string,
+	retentionDays: number,
+	maxBuilds: number,
+	now = Date.now(),
+) {
+	const cutoff =
+		now - normalizeJobRetentionDaysValue(retentionDays) * 24 * 60 * 60 * 1000;
+
+	runtimeDb.run(
+		`DELETE FROM job_runtime_build
+		 WHERE instance_id = ?
+			AND full_project_name = ?
+			AND COALESCE(timestamp, 0) < ?`,
+		[instanceId, fullProjectName, cutoff],
+	);
+
+	const normalizedMaxBuilds = normalizeJobMaxBuildsValue(maxBuilds);
+	const rowsToRemove = runtimeDb
+		.query<{ build_number: number }, [string, string, number]>(`
+			SELECT build_number
+			FROM job_runtime_build
+			WHERE instance_id = ? AND full_project_name = ?
+			ORDER BY COALESCE(timestamp, 0) DESC, build_number DESC
+			LIMIT -1 OFFSET ?
+		`)
+		.all(instanceId, fullProjectName, normalizedMaxBuilds);
+
+	for (const row of rowsToRemove) {
+		runtimeDb.run(
+			`DELETE FROM job_runtime_build
+			 WHERE instance_id = ? AND full_project_name = ? AND build_number = ?`,
+			[instanceId, fullProjectName, row.build_number],
+		);
+	}
 }
 
 function appendHistoryIfChanged(snapshot: JenkinsJobRuntimeSnapshot): boolean {
@@ -513,6 +672,10 @@ function deleteJobRuntimeData(instanceId: string, fullProjectName: string) {
 		"DELETE FROM job_runtime_log WHERE instance_id = ? AND full_project_name = ?",
 		[instanceId, fullProjectName],
 	);
+	runtimeDb.run(
+		"DELETE FROM job_runtime_build WHERE instance_id = ? AND full_project_name = ?",
+		[instanceId, fullProjectName],
+	);
 }
 
 function deleteInstanceRuntimeData(instanceId: string) {
@@ -523,6 +686,9 @@ function deleteInstanceRuntimeData(instanceId: string) {
 		instanceId,
 	]);
 	runtimeDb.run("DELETE FROM job_runtime_log WHERE instance_id = ?", [
+		instanceId,
+	]);
+	runtimeDb.run("DELETE FROM job_runtime_build WHERE instance_id = ?", [
 		instanceId,
 	]);
 }
@@ -543,6 +709,14 @@ async function readConfig(): Promise<StoredConfig> {
 			? parsed.instances.map((instance) => ({
 					...instance,
 					jobs: Array.isArray(instance.jobs) ? instance.jobs : [],
+					jobRetentionDays: normalizeJobRetentionDays(
+						instance.jobRetentionDays,
+						Array.isArray(instance.jobs) ? instance.jobs : [],
+					),
+					jobMaxBuilds: normalizeJobMaxBuilds(
+						instance.jobMaxBuilds,
+						Array.isArray(instance.jobs) ? instance.jobs : [],
+					),
 					monitoringEnabled: instance.monitoringEnabled ?? true,
 					pollIntervalMinutes: normalizePollIntervalMinutes(
 						instance.pollIntervalMinutes,
@@ -721,6 +895,12 @@ export async function saveJenkinsInstance(
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
 					jobs: normalized.jobs ?? config.instances[existingIndex].jobs,
+					jobRetentionDays:
+						normalized.jobRetentionDays ??
+						config.instances[existingIndex].jobRetentionDays,
+					jobMaxBuilds:
+						normalized.jobMaxBuilds ??
+						config.instances[existingIndex].jobMaxBuilds,
 					monitoringEnabled:
 						normalized.monitoringEnabled ??
 						config.instances[existingIndex].monitoringEnabled,
@@ -734,6 +914,12 @@ export async function saveJenkinsInstance(
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
 					jobs: normalized.jobs ?? [],
+					jobRetentionDays:
+						normalized.jobRetentionDays ??
+						normalizeJobRetentionDays(undefined, normalized.jobs ?? []),
+					jobMaxBuilds:
+						normalized.jobMaxBuilds ??
+						normalizeJobMaxBuilds(undefined, normalized.jobs ?? []),
 					monitoringEnabled: normalized.monitoringEnabled ?? true,
 					pollIntervalMinutes:
 						normalized.pollIntervalMinutes ?? normalizePollIntervalMinutes(),
@@ -776,6 +962,15 @@ export async function saveJenkinsInstance(
 	}
 
 	await writeConfig(config);
+
+	for (const job of record.jobs) {
+		pruneBuildsForJob(
+			record.id,
+			job,
+			record.jobRetentionDays[job] ?? DEFAULT_JOB_RETENTION_DAYS,
+			record.jobMaxBuilds[job] ?? DEFAULT_JOB_MAX_BUILDS,
+		);
+	}
 
 	if (normalized.apiKey) {
 		await saveApiKey(record.id, normalized.apiKey);
@@ -829,6 +1024,7 @@ type JenkinsJobApiResponse = {
 	lastCompletedBuild?: JenkinsBuildReference | null;
 	lastSuccessfulBuild?: JenkinsBuildReference | null;
 	lastFailedBuild?: JenkinsBuildReference | null;
+	builds?: JenkinsBuildApiResponse[];
 };
 
 function toBuildSummary(
@@ -846,6 +1042,198 @@ function toBuildSummary(
 		timestamp: build.timestamp,
 		duration: build.duration,
 		displayName: build.displayName,
+	};
+}
+
+function toBuildRecord(build: JenkinsBuildApiResponse): JenkinsJobBuildRecord {
+	return {
+		...toBuildSummary(build),
+		id: `${build.number}`,
+		number: build.number,
+		url: build.url,
+		building: Boolean(build.building),
+		resultCategory: getResultCategory(build),
+	};
+}
+
+function getResultCategory(
+	build: Pick<JenkinsBuildApiResponse, "building" | "result">,
+): JenkinsJobBuildRecord["resultCategory"] {
+	if (build.building) {
+		return "running";
+	}
+
+	switch (build.result) {
+		case "SUCCESS":
+			return "success";
+		case "FAILURE":
+		case "ABORTED":
+		case "UNSTABLE":
+		case "NOT_BUILT":
+			return "failed";
+		default:
+			return "other";
+	}
+}
+
+function getRangeStart(range: JenkinsJobAnalytics["range"], now: Date): Date {
+	const start = new Date(now);
+
+	switch (range) {
+		case "last12h":
+			start.setHours(start.getHours() - 12);
+			return start;
+		case "last1d":
+			start.setDate(start.getDate() - 1);
+			return start;
+		case "last7d":
+			start.setDate(start.getDate() - 7);
+			return start;
+		case "last1m":
+			start.setMonth(start.getMonth() - 1);
+			return start;
+	}
+}
+
+function getBucketStepMs(range: JenkinsJobAnalytics["range"]): number {
+	switch (range) {
+		case "last12h":
+			return 60 * 60 * 1000;
+		case "last1d":
+			return 2 * 60 * 60 * 1000;
+		case "last7d":
+			return 24 * 60 * 60 * 1000;
+		case "last1m":
+			return 7 * 24 * 60 * 60 * 1000;
+	}
+}
+
+function formatBucketLabel(date: Date, range: JenkinsJobAnalytics["range"]) {
+	switch (range) {
+		case "last12h":
+		case "last1d":
+			return date.toLocaleString([], {
+				month: "short",
+				day: "numeric",
+				hour: "numeric",
+			});
+		case "last7d":
+			return date.toLocaleDateString([], {
+				month: "short",
+				day: "numeric",
+			});
+		case "last1m":
+			return date.toLocaleDateString([], {
+				month: "short",
+				day: "numeric",
+			});
+	}
+}
+
+function buildAnalytics(params: {
+	range: JenkinsJobAnalytics["range"];
+	now?: Date;
+	builds: JenkinsJobBuildRecord[];
+}): JenkinsJobAnalytics {
+	const now = params.now ?? new Date();
+	const rangeStart = getRangeStart(params.range, now);
+	const stepMs = getBucketStepMs(params.range);
+	const filteredBuilds = params.builds
+		.filter((build) => (build.timestamp ?? 0) >= rangeStart.getTime())
+		.sort((left, right) => (right.timestamp ?? 0) - (left.timestamp ?? 0));
+	const buckets = new Map<number, JenkinsJobBuildBucket>();
+
+	for (
+		let cursor = rangeStart.getTime();
+		cursor <= now.getTime();
+		cursor += stepMs
+	) {
+		const bucketDate = new Date(cursor);
+		buckets.set(cursor, {
+			bucketStart: bucketDate.toISOString(),
+			label: formatBucketLabel(bucketDate, params.range),
+			total: 0,
+			successful: 0,
+			failed: 0,
+			running: 0,
+			successRate: null,
+		});
+	}
+
+	let completedBuilds = 0;
+	let successfulBuilds = 0;
+	let failedBuilds = 0;
+	let runningBuilds = 0;
+	let durationSum = 0;
+	let durationCount = 0;
+
+	for (const build of filteredBuilds) {
+		const timestamp = build.timestamp ?? 0;
+		const bucketKey =
+			rangeStart.getTime() +
+			Math.floor((timestamp - rangeStart.getTime()) / stepMs) * stepMs;
+		const bucket = buckets.get(bucketKey);
+
+		if (bucket) {
+			bucket.total += 1;
+		}
+
+		switch (build.resultCategory) {
+			case "success":
+				successfulBuilds += 1;
+				completedBuilds += 1;
+				if (bucket) {
+					bucket.successful += 1;
+				}
+				break;
+			case "failed":
+				failedBuilds += 1;
+				completedBuilds += 1;
+				if (bucket) {
+					bucket.failed += 1;
+				}
+				break;
+			case "running":
+				runningBuilds += 1;
+				if (bucket) {
+					bucket.running += 1;
+				}
+				break;
+			default:
+				completedBuilds += 1;
+		}
+
+		if (typeof build.duration === "number" && build.duration >= 0) {
+			durationSum += build.duration;
+			durationCount += 1;
+		}
+	}
+
+	const bucketList = [...buckets.values()].map((bucket) => ({
+		...bucket,
+		successRate:
+			bucket.successful + bucket.failed > 0
+				? bucket.successful / (bucket.successful + bucket.failed)
+				: null,
+	}));
+
+	return {
+		range: params.range,
+		rangeStart: rangeStart.toISOString(),
+		rangeEnd: now.toISOString(),
+		totalBuilds: filteredBuilds.length,
+		completedBuilds,
+		successfulBuilds,
+		failedBuilds,
+		runningBuilds,
+		successRate:
+			successfulBuilds + failedBuilds > 0
+				? successfulBuilds / (successfulBuilds + failedBuilds)
+				: null,
+		averageDurationMs:
+			durationCount > 0 ? Math.round(durationSum / durationCount) : null,
+		builds: filteredBuilds,
+		buckets: bucketList,
 	};
 }
 
@@ -887,11 +1275,28 @@ async function fetchJobDetailsForInstance(
 	}
 
 	const jobUrl = buildJenkinsJobUrl(instance.hostUrl, fullProjectName);
+	const jobApiUrl =
+		`${jobUrl}api/json?tree=` +
+		[
+			"displayName",
+			"fullDisplayName",
+			"url",
+			"description",
+			"buildable",
+			"inQueue",
+			"color",
+			"nextBuildNumber",
+			"lastBuild[number,url]",
+			"lastCompletedBuild[number,url]",
+			"lastSuccessfulBuild[number,url]",
+			"lastFailedBuild[number,url]",
+			"builds[number,url,result,building,timestamp,duration,displayName]{0,200}",
+		].join(",");
 	let response: Response;
 
 	try {
 		response = await fetchJsonWithAuth(
-			`${jobUrl}api/json`,
+			jobApiUrl,
 			instance.username,
 			storedApiKey,
 		);
@@ -937,6 +1342,13 @@ async function fetchJobDetailsForInstance(
 				storedApiKey,
 			),
 		]);
+	const builds = Array.isArray(payload.builds)
+		? payload.builds
+				.filter(
+					(build) => typeof build.number === "number" && Boolean(build.url),
+				)
+				.map(toBuildRecord)
+		: [];
 
 	return {
 		fullProjectName,
@@ -953,6 +1365,7 @@ async function fetchJobDetailsForInstance(
 		lastCompletedBuild,
 		lastSuccessfulBuild,
 		lastFailedBuild,
+		builds,
 	};
 }
 
@@ -973,11 +1386,26 @@ export async function getJenkinsJobDetails(
 		instance,
 		normalized.fullProjectName,
 	);
+	const observedAt = new Date().toISOString();
+	persistBuilds(
+		instance.id,
+		normalized.fullProjectName,
+		details.builds ?? [],
+		observedAt,
+	);
+	pruneBuildsForJob(
+		instance.id,
+		normalized.fullProjectName,
+		instance.jobRetentionDays[normalized.fullProjectName] ??
+			DEFAULT_JOB_RETENTION_DAYS,
+		instance.jobMaxBuilds[normalized.fullProjectName] ?? DEFAULT_JOB_MAX_BUILDS,
+	);
 	const snapshot = buildRuntimeSnapshot({
 		instanceId: instance.id,
 		fullProjectName: normalized.fullProjectName,
 		source: "manual",
 		details,
+		observedAt,
 	});
 	appendHistoryIfChanged(snapshot);
 	return details;
@@ -1065,6 +1493,28 @@ export async function getJenkinsJobActivity(
 	};
 }
 
+export async function getJenkinsJobAnalytics(
+	input: JenkinsJobAnalyticsInput,
+): Promise<JenkinsJobAnalytics> {
+	const normalized = validateJobAnalyticsInput(input);
+	const now = new Date();
+	const range = normalizeBuildTimeRange(normalized.range);
+	const rangeStart = getRangeStart(range, now);
+	const builds = selectBuildsSinceStatement
+		.all(
+			normalized.instanceId,
+			normalized.fullProjectName,
+			rangeStart.getTime(),
+		)
+		.map(mapBuildRow);
+
+	return buildAnalytics({
+		range,
+		now,
+		builds,
+	});
+}
+
 export async function runJenkinsMonitoringCycle(): Promise<{
 	processedJobs: number;
 	observedChanges: number;
@@ -1097,6 +1547,19 @@ export async function runJenkinsMonitoringCycle(): Promise<{
 				const details = await fetchJobDetailsForInstance(
 					instance,
 					fullProjectName,
+				);
+				persistBuilds(
+					instance.id,
+					fullProjectName,
+					details.builds ?? [],
+					observedAt,
+				);
+				pruneBuildsForJob(
+					instance.id,
+					fullProjectName,
+					instance.jobRetentionDays[fullProjectName] ??
+						DEFAULT_JOB_RETENTION_DAYS,
+					instance.jobMaxBuilds[fullProjectName] ?? DEFAULT_JOB_MAX_BUILDS,
 				);
 				const snapshot = buildRuntimeSnapshot({
 					instanceId: instance.id,

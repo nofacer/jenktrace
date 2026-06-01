@@ -4,6 +4,8 @@ import type {
 	JenkinsInstanceSummary,
 	JenkinsJobActivity,
 	JenkinsJobActivityInput,
+	JenkinsJobAnalytics,
+	JenkinsJobAnalyticsInput,
 	JenkinsJobDetails,
 	JenkinsJobDetailsInput,
 	UpsertJenkinsInstanceInput,
@@ -39,6 +41,10 @@ export type AppRPCSchema = {
 			getJenkinsJobActivity: {
 				params: JenkinsJobActivityInput;
 				response: JenkinsJobActivity;
+			};
+			getJenkinsJobAnalytics: {
+				params: JenkinsJobAnalyticsInput;
+				response: JenkinsJobAnalytics;
 			};
 			runJenkinsMonitoringCycle: {
 				params: undefined;

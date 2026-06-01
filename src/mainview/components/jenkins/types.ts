@@ -15,6 +15,8 @@ export type InstanceFormState = {
 export type JobFormState = {
 	originalName?: string;
 	fullProjectName: string;
+	retentionDays: string;
+	maxBuilds: string;
 };
 
 export type InstanceDialogMode = "create" | "edit";
@@ -30,6 +32,8 @@ export const EMPTY_FORM: InstanceFormState = {
 
 export const EMPTY_JOB_FORM: JobFormState = {
 	fullProjectName: "",
+	retentionDays: "90",
+	maxBuilds: "1000",
 };
 
 export function buildFormState(
@@ -49,7 +53,11 @@ export function buildFormState(
 	};
 }
 
-export function buildJobFormState(job?: string | null): JobFormState {
+export function buildJobFormState(
+	job?: string | null,
+	retentionDays?: number,
+	maxBuilds?: number,
+): JobFormState {
 	if (!job) {
 		return EMPTY_JOB_FORM;
 	}
@@ -57,6 +65,8 @@ export function buildJobFormState(job?: string | null): JobFormState {
 	return {
 		originalName: job,
 		fullProjectName: job,
+		retentionDays: String(retentionDays ?? 90),
+		maxBuilds: String(maxBuilds ?? 1000),
 	};
 }
 

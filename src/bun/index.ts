@@ -7,6 +7,7 @@ import {
 import type {
 	JenkinsConnectionTestInput,
 	JenkinsJobActivityInput,
+	JenkinsJobAnalyticsInput,
 	JenkinsJobDetailsInput,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
@@ -14,6 +15,7 @@ import type { AppRPCSchema } from "../shared/rpc";
 import {
 	deleteJenkinsInstance,
 	getJenkinsJobActivity,
+	getJenkinsJobAnalytics,
 	getJenkinsJobDetails,
 	listJenkinsInstances,
 	runJenkinsMonitoringCycle,
@@ -60,6 +62,8 @@ const appRpc = BrowserView.defineRPC<AppRPCSchema>({
 				getJenkinsJobDetails(params),
 			getJenkinsJobActivity: (params: JenkinsJobActivityInput) =>
 				getJenkinsJobActivity(params),
+			getJenkinsJobAnalytics: (params: JenkinsJobAnalyticsInput) =>
+				getJenkinsJobAnalytics(params),
 			runJenkinsMonitoringCycle: () => runJenkinsMonitoringCycle(),
 		},
 	},

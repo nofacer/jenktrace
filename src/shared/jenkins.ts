@@ -5,6 +5,8 @@ export type JenkinsInstanceRecord = {
 	hostUrl: string;
 	username: string;
 	jobs: string[];
+	jobRetentionDays: Record<string, number>;
+	jobMaxBuilds: Record<string, number>;
 	monitoringEnabled: boolean;
 	pollIntervalMinutes: number;
 	createdAt: string;
@@ -33,6 +35,12 @@ export type JenkinsJobDetailsInput = {
 	fullProjectName: string;
 };
 
+export type JenkinsBuildTimeRange = "last12h" | "last1d" | "last7d" | "last1m";
+
+export type JenkinsJobAnalyticsInput = JenkinsJobDetailsInput & {
+	range: JenkinsBuildTimeRange;
+};
+
 export type JenkinsJobBuildSummary = {
 	number: number;
 	url: string;
@@ -41,6 +49,36 @@ export type JenkinsJobBuildSummary = {
 	timestamp?: number;
 	duration?: number;
 	displayName?: string;
+};
+
+export type JenkinsJobBuildRecord = JenkinsJobBuildSummary & {
+	id: string;
+	resultCategory: "success" | "failed" | "running" | "other";
+};
+
+export type JenkinsJobBuildBucket = {
+	bucketStart: string;
+	label: string;
+	total: number;
+	successful: number;
+	failed: number;
+	running: number;
+	successRate: number | null;
+};
+
+export type JenkinsJobAnalytics = {
+	range: JenkinsBuildTimeRange;
+	rangeStart: string;
+	rangeEnd: string;
+	totalBuilds: number;
+	completedBuilds: number;
+	successfulBuilds: number;
+	failedBuilds: number;
+	runningBuilds: number;
+	successRate: number | null;
+	averageDurationMs: number | null;
+	builds: JenkinsJobBuildRecord[];
+	buckets: JenkinsJobBuildBucket[];
 };
 
 export type JenkinsJobDetails = {
@@ -57,6 +95,7 @@ export type JenkinsJobDetails = {
 	lastCompletedBuild?: JenkinsJobBuildSummary | null;
 	lastSuccessfulBuild?: JenkinsJobBuildSummary | null;
 	lastFailedBuild?: JenkinsJobBuildSummary | null;
+	builds?: JenkinsJobBuildRecord[];
 };
 
 export type JenkinsJobActivityInput = {
@@ -110,6 +149,8 @@ export type UpsertJenkinsInstanceInput = {
 	hostUrl: string;
 	username: string;
 	jobs?: string[];
+	jobRetentionDays?: Record<string, number>;
+	jobMaxBuilds?: Record<string, number>;
 	monitoringEnabled?: boolean;
 	pollIntervalMinutes?: number;
 	apiKey?: string;
@@ -192,6 +233,15 @@ export function validateJobDetailsInput(
 	};
 }
 
+export function validateJobAnalyticsInput(
+	input: JenkinsJobAnalyticsInput,
+): JenkinsJobAnalyticsInput {
+	return {
+		...validateJobDetailsInput(input),
+		range: normalizeBuildTimeRange(input.range),
+	};
+}
+
 export function validateJobActivityInput(
 	input: JenkinsJobActivityInput,
 ): JenkinsJobActivityInput {
@@ -213,6 +263,11 @@ export function validateInstanceInput(
 	const hostUrl = normalizeHostUrl(input.hostUrl);
 	const username = input.username.trim();
 	const jobs = input.jobs ? normalizeJobNames(input.jobs) : undefined;
+	const jobRetentionDays = normalizeJobRetentionDays(
+		input.jobRetentionDays,
+		jobs,
+	);
+	const jobMaxBuilds = normalizeJobMaxBuilds(input.jobMaxBuilds, jobs);
 	const monitoringEnabled = input.monitoringEnabled ?? true;
 	const pollIntervalMinutes = normalizePollIntervalMinutes(
 		input.pollIntervalMinutes,
@@ -231,6 +286,8 @@ export function validateInstanceInput(
 		hostUrl,
 		username,
 		jobs,
+		jobRetentionDays,
+		jobMaxBuilds,
 		monitoringEnabled,
 		pollIntervalMinutes,
 		apiKey: input.apiKey?.trim(),
@@ -243,4 +300,72 @@ export function normalizePollIntervalMinutes(value?: number): number {
 	}
 
 	return Math.min(1440, Math.max(1, Math.round(value)));
+}
+
+export function normalizeBuildTimeRange(
+	value?: JenkinsBuildTimeRange,
+): JenkinsBuildTimeRange {
+	switch (value) {
+		case "last12h":
+		case "last1d":
+		case "last7d":
+		case "last1m":
+			return value;
+		default:
+			return "last7d";
+	}
+}
+
+export function normalizeJobRetentionDays(
+	value?: Record<string, number>,
+	jobNames?: string[],
+): Record<string, number> {
+	const normalizedEntries = Object.entries(value ?? {}).map(
+		([job, days]) =>
+			[
+				normalizeFullProjectName(job),
+				normalizeJobRetentionDaysValue(days),
+			] as const,
+	);
+	const filteredEntries = normalizedEntries.filter(([job]) => Boolean(job));
+	const allowedJobs = jobNames ? new Set(jobNames) : null;
+
+	return Object.fromEntries(
+		filteredEntries.filter(([job]) => !allowedJobs || allowedJobs.has(job)),
+	);
+}
+
+export function normalizeJobRetentionDaysValue(value?: number): number {
+	if (value == null || Number.isNaN(value)) {
+		return 90;
+	}
+
+	return Math.min(3650, Math.max(1, Math.round(value)));
+}
+
+export function normalizeJobMaxBuilds(
+	value?: Record<string, number>,
+	jobNames?: string[],
+): Record<string, number> {
+	const normalizedEntries = Object.entries(value ?? {}).map(
+		([job, count]) =>
+			[
+				normalizeFullProjectName(job),
+				normalizeJobMaxBuildsValue(count),
+			] as const,
+	);
+	const filteredEntries = normalizedEntries.filter(([job]) => Boolean(job));
+	const allowedJobs = jobNames ? new Set(jobNames) : null;
+
+	return Object.fromEntries(
+		filteredEntries.filter(([job]) => !allowedJobs || allowedJobs.has(job)),
+	);
+}
+
+export function normalizeJobMaxBuildsValue(value?: number): number {
+	if (value == null || Number.isNaN(value)) {
+		return 1000;
+	}
+
+	return Math.min(100000, Math.max(1, Math.round(value)));
 }

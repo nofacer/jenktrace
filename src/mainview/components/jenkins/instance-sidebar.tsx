@@ -211,9 +211,15 @@ export function InstanceSidebar({
 										)}
 									>
 										<p className="truncate text-sm font-medium">{job}</p>
-										<p className="mt-1 text-xs text-muted-foreground">
-											{buildJenkinsJobPath(job)}
-										</p>
+										<div className="mt-1 flex items-center justify-between gap-3">
+											<p className="truncate text-xs text-muted-foreground">
+												{buildJenkinsJobPath(job)}
+											</p>
+											<p className="shrink-0 text-[11px] text-muted-foreground">
+												{selectedInstance.jobRetentionDays[job] ?? 90}d /{" "}
+												{selectedInstance.jobMaxBuilds[job] ?? 1000}b
+											</p>
+										</div>
 									</button>
 								);
 							})}

@@ -16,9 +16,11 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { appRpc } from "@/lib/app-rpc";
 import type {
+	JenkinsBuildTimeRange,
 	JenkinsConnectionTestResult,
 	JenkinsInstanceSummary,
 	JenkinsJobActivity,
+	JenkinsJobAnalytics,
 	JenkinsJobDetails,
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
@@ -55,6 +57,9 @@ export default function App() {
 	const [jobErrorMessage, setJobErrorMessage] = useState<string | null>(null);
 	const [jobDetailsError, setJobDetailsError] = useState<string | null>(null);
 	const [jobActivityError, setJobActivityError] = useState<string | null>(null);
+	const [jobAnalyticsError, setJobAnalyticsError] = useState<string | null>(
+		null,
+	);
 	const [deleteJobErrorMessage, setDeleteJobErrorMessage] = useState<
 		string | null
 	>(null);
@@ -64,6 +69,11 @@ export default function App() {
 	const [jobActivity, setJobActivity] = useState<JenkinsJobActivity | null>(
 		null,
 	);
+	const [jobAnalytics, setJobAnalytics] = useState<JenkinsJobAnalytics | null>(
+		null,
+	);
+	const [selectedTimeRange, setSelectedTimeRange] =
+		useState<JenkinsBuildTimeRange>("last7d");
 
 	const selectedInstance = useMemo(
 		() =>
@@ -111,6 +121,8 @@ export default function App() {
 			setJobDetailsError(null);
 			setJobActivity(null);
 			setJobActivityError(null);
+			setJobAnalytics(null);
+			setJobAnalyticsError(null);
 			setIsLoadingJobDetails(false);
 			return;
 		}
@@ -121,9 +133,10 @@ export default function App() {
 			setIsLoadingJobDetails(true);
 			setJobDetailsError(null);
 			setJobActivityError(null);
+			setJobAnalyticsError(null);
 
 			try {
-				const [nextDetails, nextActivity] = await Promise.all([
+				const [nextDetails, nextActivity, nextAnalytics] = await Promise.all([
 					appRpc.proxy.request.getJenkinsJobDetails({
 						instanceId: selectedInstance.id,
 						fullProjectName: selectedJob,
@@ -132,16 +145,23 @@ export default function App() {
 						instanceId: selectedInstance.id,
 						fullProjectName: selectedJob,
 					}),
+					appRpc.proxy.request.getJenkinsJobAnalytics({
+						instanceId: selectedInstance.id,
+						fullProjectName: selectedJob,
+						range: selectedTimeRange,
+					}),
 				]);
 
 				if (!isCancelled) {
 					setJobDetails(nextDetails);
 					setJobActivity(nextActivity);
+					setJobAnalytics(nextAnalytics);
 				}
 			} catch (error) {
 				if (!isCancelled) {
 					setJobDetails(null);
 					setJobActivity(null);
+					setJobAnalytics(null);
 					setJobDetailsError(
 						error instanceof Error
 							? error.message
@@ -149,6 +169,11 @@ export default function App() {
 					);
 					setJobActivityError(
 						error instanceof Error ? error.message : "Failed to load activity.",
+					);
+					setJobAnalyticsError(
+						error instanceof Error
+							? error.message
+							: "Failed to load build analytics.",
 					);
 				}
 			} finally {
@@ -163,7 +188,7 @@ export default function App() {
 		return () => {
 			isCancelled = true;
 		};
-	}, [selectedInstance, selectedJob]);
+	}, [selectedInstance, selectedJob, selectedTimeRange]);
 
 	function openCreateDialog() {
 		setInstanceDialogMode("create");
@@ -211,7 +236,13 @@ export default function App() {
 		}
 
 		setJobDialogMode("edit");
-		setJobFormState(buildJobFormState(selectedJob));
+		setJobFormState(
+			buildJobFormState(
+				selectedJob,
+				selectedInstance.jobRetentionDays[selectedJob],
+				selectedInstance.jobMaxBuilds[selectedJob],
+			),
+		);
 		setJobErrorMessage(null);
 		setIsJobDialogOpen(true);
 	}
@@ -325,6 +356,8 @@ export default function App() {
 			}
 
 			const previousName = jobFormState.originalName;
+			const retentionDays = Number(jobFormState.retentionDays);
+			const maxBuilds = Number(jobFormState.maxBuilds);
 			const duplicate = selectedInstance.jobs.find(
 				(job) => job === nextName && job !== previousName,
 			);
@@ -340,12 +373,28 @@ export default function App() {
 						job === previousName ? nextName : job,
 					)
 				: [...selectedInstance.jobs, nextName];
+			const nextRetentionDays = {
+				...selectedInstance.jobRetentionDays,
+			};
+			const nextMaxBuilds = {
+				...selectedInstance.jobMaxBuilds,
+			};
+
+			if (previousName && previousName !== nextName) {
+				delete nextRetentionDays[previousName];
+				delete nextMaxBuilds[previousName];
+			}
+
+			nextRetentionDays[nextName] = retentionDays;
+			nextMaxBuilds[nextName] = maxBuilds;
 
 			const nextInstances = await appRpc.proxy.request.saveJenkinsInstance({
 				id: selectedInstance.id,
 				hostUrl: selectedInstance.hostUrl,
 				username: selectedInstance.username,
 				jobs: nextJobs,
+				jobRetentionDays: nextRetentionDays,
+				jobMaxBuilds: nextMaxBuilds,
 			});
 
 			setInstances(nextInstances);
@@ -369,9 +418,10 @@ export default function App() {
 		setIsLoadingJobDetails(true);
 		setJobDetailsError(null);
 		setJobActivityError(null);
+		setJobAnalyticsError(null);
 
 		try {
-			const [nextDetails, nextActivity] = await Promise.all([
+			const [nextDetails, nextActivity, nextAnalytics] = await Promise.all([
 				appRpc.proxy.request.getJenkinsJobDetails({
 					instanceId: selectedInstance.id,
 					fullProjectName: selectedJob,
@@ -380,12 +430,19 @@ export default function App() {
 					instanceId: selectedInstance.id,
 					fullProjectName: selectedJob,
 				}),
+				appRpc.proxy.request.getJenkinsJobAnalytics({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+					range: selectedTimeRange,
+				}),
 			]);
 			setJobDetails(nextDetails);
 			setJobActivity(nextActivity);
+			setJobAnalytics(nextAnalytics);
 		} catch (error) {
 			setJobDetails(null);
 			setJobActivity(null);
+			setJobAnalytics(null);
 			setJobDetailsError(
 				error instanceof Error
 					? error.message
@@ -393,6 +450,11 @@ export default function App() {
 			);
 			setJobActivityError(
 				error instanceof Error ? error.message : "Failed to load activity.",
+			);
+			setJobAnalyticsError(
+				error instanceof Error
+					? error.message
+					: "Failed to load build analytics.",
 			);
 		} finally {
 			setIsLoadingJobDetails(false);
@@ -409,6 +471,10 @@ export default function App() {
 
 		const currentJobIndex = selectedInstance.jobs.indexOf(selectedJob);
 		const nextJobs = selectedInstance.jobs.filter((job) => job !== selectedJob);
+		const nextRetentionDays = { ...selectedInstance.jobRetentionDays };
+		const nextMaxBuilds = { ...selectedInstance.jobMaxBuilds };
+		delete nextRetentionDays[selectedJob];
+		delete nextMaxBuilds[selectedJob];
 		const nextSelectedJob =
 			nextJobs[currentJobIndex] ?? nextJobs[currentJobIndex - 1] ?? null;
 
@@ -418,6 +484,8 @@ export default function App() {
 				hostUrl: selectedInstance.hostUrl,
 				username: selectedInstance.username,
 				jobs: nextJobs,
+				jobRetentionDays: nextRetentionDays,
+				jobMaxBuilds: nextMaxBuilds,
 			});
 
 			setInstances(nextInstances);
@@ -427,6 +495,8 @@ export default function App() {
 			setJobDetailsError(null);
 			setJobActivity(null);
 			setJobActivityError(null);
+			setJobAnalytics(null);
+			setJobAnalyticsError(null);
 			setIsDeleteJobDialogOpen(false);
 		} catch (error) {
 			setDeleteJobErrorMessage(
@@ -460,10 +530,14 @@ export default function App() {
 					selectedJob={selectedJob}
 					jobDetails={jobDetails}
 					jobActivity={jobActivity}
+					jobAnalytics={jobAnalytics}
 					jobDetailsError={jobDetailsError}
 					jobActivityError={jobActivityError}
+					jobAnalyticsError={jobAnalyticsError}
+					selectedTimeRange={selectedTimeRange}
 					isLoadingJobDetails={isLoadingJobDetails}
 					isDeletingJob={isDeletingJob}
+					onTimeRangeChange={setSelectedTimeRange}
 					onRefreshJob={refreshSelectedJob}
 					onEditJob={openEditJobDialog}
 					onDeleteJob={openDeleteJobDialog}

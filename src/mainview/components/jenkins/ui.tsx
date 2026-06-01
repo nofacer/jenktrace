@@ -145,3 +145,5 @@ function formatDuration(duration?: number): string {
 
 	return `${seconds}s`;
 }
+
+export { formatDuration };

@@ -1,4 +1,20 @@
-import { Pencil, RefreshCw, Trash2 } from "lucide-react";
+import {
+	CheckCircle2,
+	Pencil,
+	RefreshCw,
+	Trash2,
+	TriangleAlert,
+	Wrench,
+} from "lucide-react";
+import {
+	Area,
+	AreaChart,
+	Bar,
+	BarChart,
+	CartesianGrid,
+	XAxis,
+	YAxis,
+} from "recharts";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -9,29 +25,68 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import {
+	type ChartConfig,
+	ChartContainer,
+	ChartTooltip,
+	ChartTooltipContent,
+} from "@/components/ui/chart";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type {
+	JenkinsBuildTimeRange,
 	JenkinsInstanceSummary,
 	JenkinsJobActivity,
+	JenkinsJobAnalytics,
+	JenkinsJobBuildRecord,
 	JenkinsJobDetails,
 } from "../../../shared/jenkins";
-import {
-	buildJenkinsJobPath,
-	buildJenkinsJobUrl,
-} from "../../../shared/jenkins";
-import { ActionIconButton, BuildSummaryCard, InfoTile } from "./ui";
+import { ActionIconButton, formatDuration, InfoTile } from "./ui";
+
+const RANGE_OPTIONS: Array<{ label: string; value: JenkinsBuildTimeRange }> = [
+	{ label: "Last 12h", value: "last12h" },
+	{ label: "Last 1d", value: "last1d" },
+	{ label: "Last 7d", value: "last7d" },
+	{ label: "Last 1m", value: "last1m" },
+];
+
+const buildVolumeChartConfig = {
+	successful: {
+		label: "Successful",
+		color: "var(--chart-2)",
+	},
+	failed: {
+		label: "Failed",
+		color: "var(--chart-5)",
+	},
+	running: {
+		label: "Running",
+		color: "var(--chart-3)",
+	},
+} satisfies ChartConfig;
+
+const successRateChartConfig = {
+	successRatePercent: {
+		label: "Success rate",
+		color: "var(--chart-2)",
+	},
+} satisfies ChartConfig;
 
 export function DetailsPanel({
 	selectedInstance,
 	selectedJob,
 	jobDetails,
-	jobActivity,
+	jobActivity: _jobActivity,
+	jobAnalytics,
 	jobDetailsError,
 	jobActivityError,
+	jobAnalyticsError,
+	selectedTimeRange,
 	isLoadingJobDetails,
 	isDeletingJob,
+	onTimeRangeChange,
 	onRefreshJob,
 	onEditJob,
 	onDeleteJob,
@@ -40,21 +95,37 @@ export function DetailsPanel({
 	selectedJob: string | null;
 	jobDetails: JenkinsJobDetails | null;
 	jobActivity: JenkinsJobActivity | null;
+	jobAnalytics: JenkinsJobAnalytics | null;
 	jobDetailsError: string | null;
 	jobActivityError: string | null;
+	jobAnalyticsError: string | null;
+	selectedTimeRange: JenkinsBuildTimeRange;
 	isLoadingJobDetails: boolean;
 	isDeletingJob: boolean;
+	onTimeRangeChange: (range: JenkinsBuildTimeRange) => void;
 	onRefreshJob: () => void;
 	onEditJob: () => void;
 	onDeleteJob: () => void;
 }) {
+	const buildRows = jobAnalytics?.builds ?? [];
+	const bucketRows =
+		jobAnalytics?.buckets.map((bucket) => ({
+			...bucket,
+			successRatePercent:
+				bucket.successRate == null
+					? null
+					: Math.round(bucket.successRate * 100),
+		})) ?? [];
+
 	return (
 		<div className="flex min-w-0 flex-1 flex-col bg-muted/10">
 			<div className="flex items-center justify-between px-6 py-5">
 				<div>
-					<h1 className="text-lg font-semibold">Details</h1>
+					<h1 className="text-lg font-semibold">
+						{selectedJob ?? selectedInstance?.hostUrl ?? "Job details"}
+					</h1>
 					<p className="text-sm text-muted-foreground">
-						Selected jobs now load live metadata from Jenkins.
+						Build analytics and recent build history.
 					</p>
 				</div>
 				{selectedJob ? (
@@ -89,339 +160,326 @@ export function DetailsPanel({
 
 			<Separator />
 
-			<div className="flex-1 p-6">
-				<Card className="h-full min-h-0">
-					<CardHeader>
-						<CardTitle>
-							{jobDetails?.fullDisplayName ??
-								selectedJob ??
-								selectedInstance?.hostUrl ??
-								"No selection"}
-						</CardTitle>
-						<CardDescription>
-							{selectedJob
-								? "Live Jenkins job metadata, status, and recent build summaries."
-								: selectedInstance
-									? "Choose a job from the middle column to inspect it here."
-									: "Select an instance on the left to start browsing jobs."}
-						</CardDescription>
-					</CardHeader>
-					<CardContent className="flex h-full flex-col justify-between gap-6">
-						<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-							<InfoTile
-								label="Instance"
-								value={
-									selectedInstance
-										? getInstanceTitle(selectedInstance)
-										: "Not selected"
-								}
-							/>
-							<InfoTile
-								label="Username"
-								value={selectedInstance?.username ?? "Not selected"}
-							/>
-							<InfoTile
-								label="API key"
-								value={
-									selectedInstance
-										? selectedInstance.hasApiKey
-											? "Saved in keychain"
-											: "Not saved"
-										: "Not selected"
-								}
-							/>
-							<InfoTile
-								label="Selected job"
-								value={jobDetails?.fullProjectName ?? selectedJob ?? "None"}
-							/>
-							<InfoTile
-								label="Job path"
-								value={selectedJob ? buildJenkinsJobPath(selectedJob) : "None"}
-							/>
-							<InfoTile
-								label="Job URL"
-								value={
-									jobDetails?.url ??
-									(selectedInstance && selectedJob
-										? buildJenkinsJobUrl(selectedInstance.hostUrl, selectedJob)
-										: "None")
-								}
-							/>
-							<InfoTile
-								label="Buildable"
-								value={
-									jobDetails
-										? jobDetails.buildable
-											? "Yes"
-											: "No"
-										: selectedJob
-											? "Loading..."
-											: "None"
-								}
-							/>
-							<InfoTile
-								label="Queue state"
-								value={
-									jobDetails
-										? jobDetails.inQueue
-											? "In queue"
-											: "Idle"
-										: selectedJob
-											? "Loading..."
-											: "None"
-								}
-							/>
-							<InfoTile
-								label="Color"
-								value={
-									jobDetails?.color ?? (selectedJob ? "Loading..." : "None")
-								}
-							/>
-							<InfoTile
-								label="Total jobs"
-								value={
-									selectedInstance ? String(selectedInstance.jobs.length) : "0"
-								}
-							/>
-							<InfoTile
-								label="Monitoring"
-								value={
-									selectedInstance
-										? selectedInstance.monitoringEnabled
-											? `Every ${selectedInstance.pollIntervalMinutes} min`
-											: "Disabled"
-										: "Not selected"
-								}
-							/>
-							<InfoTile
-								label="Last updated"
-								value={
-									selectedInstance
-										? new Date(selectedInstance.updatedAt).toLocaleString()
-										: "Not selected"
-								}
-							/>
-						</div>
+			<div className="flex-1 overflow-y-auto p-6">
+				<div className="flex flex-col gap-6">
+					{isLoadingJobDetails ? (
+						<Card className="border-dashed bg-background/70">
+							<CardHeader>
+								<CardTitle>Loading build analytics</CardTitle>
+								<CardDescription>
+									Fetching persisted build data for the selected job.
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="grid gap-3 xl:grid-cols-2">
+								<Skeleton className="h-72 w-full rounded-xl" />
+								<Skeleton className="h-72 w-full rounded-xl" />
+								<Skeleton className="h-52 w-full rounded-xl xl:col-span-2" />
+							</CardContent>
+						</Card>
+					) : null}
 
-						{isLoadingJobDetails ? (
-							<Card className="border-dashed bg-background/70">
-								<CardHeader>
-									<CardTitle>Loading job details</CardTitle>
-									<CardDescription>
-										Fetching the selected Jenkins job and recent build metadata.
-									</CardDescription>
+					{jobDetailsError ? (
+						<Alert variant="destructive">
+							<AlertTitle>Unable to load job details</AlertTitle>
+							<AlertDescription>{jobDetailsError}</AlertDescription>
+						</Alert>
+					) : null}
+
+					{jobAnalyticsError ? (
+						<Alert variant="destructive">
+							<AlertTitle>Unable to load build analytics</AlertTitle>
+							<AlertDescription>{jobAnalyticsError}</AlertDescription>
+						</Alert>
+					) : null}
+
+					{jobActivityError ? (
+						<Alert variant="destructive">
+							<AlertTitle>Unable to load job activity</AlertTitle>
+							<AlertDescription>{jobActivityError}</AlertDescription>
+						</Alert>
+					) : null}
+
+					{!isLoadingJobDetails && !jobDetailsError && jobDetails ? (
+						<>
+							<Card>
+								<CardHeader className="gap-3">
+									<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+										<div>
+											<CardTitle>Build analytics</CardTitle>
+											<CardDescription>
+												The selected time range filters both charts and the
+												build list below.
+											</CardDescription>
+										</div>
+										<ToggleGroup
+											value={[selectedTimeRange]}
+											onValueChange={(value) => {
+												const nextValue = value[0];
+
+												if (nextValue) {
+													onTimeRangeChange(nextValue as JenkinsBuildTimeRange);
+												}
+											}}
+											variant="outline"
+											size="sm"
+										>
+											{RANGE_OPTIONS.map((option) => (
+												<ToggleGroupItem
+													key={option.value}
+													value={option.value}
+												>
+													{option.label}
+												</ToggleGroupItem>
+											))}
+										</ToggleGroup>
+									</div>
 								</CardHeader>
-								<CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-									<Skeleton className="h-20 w-full rounded-xl" />
-									<Skeleton className="h-20 w-full rounded-xl" />
-									<Skeleton className="h-20 w-full rounded-xl" />
-									<Skeleton className="h-20 w-full rounded-xl" />
-									<Skeleton className="h-20 w-full rounded-xl" />
-									<Skeleton className="h-20 w-full rounded-xl" />
+								<CardContent className="flex flex-col gap-6">
+									<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+										<InfoTile
+											label="Total builds"
+											value={String(jobAnalytics?.totalBuilds ?? 0)}
+										/>
+										<InfoTile
+											label="Success rate"
+											value={formatPercent(jobAnalytics?.successRate)}
+										/>
+										<InfoTile
+											label="Successful"
+											value={String(jobAnalytics?.successfulBuilds ?? 0)}
+										/>
+										<InfoTile
+											label="Failed"
+											value={String(jobAnalytics?.failedBuilds ?? 0)}
+										/>
+										<InfoTile
+											label="Avg duration"
+											value={formatDuration(
+												jobAnalytics?.averageDurationMs ?? undefined,
+											)}
+										/>
+									</div>
+
+									<div className="grid gap-4 xl:grid-cols-2">
+										<Card className="bg-background">
+											<CardHeader>
+												<CardTitle>Build volume</CardTitle>
+												<CardDescription>
+													Counts grouped by time bucket for the active range.
+												</CardDescription>
+											</CardHeader>
+											<CardContent>
+												<ChartContainer
+													config={buildVolumeChartConfig}
+													className="h-72 w-full"
+												>
+													<BarChart data={bucketRows}>
+														<CartesianGrid vertical={false} />
+														<XAxis
+															dataKey="label"
+															tickLine={false}
+															axisLine={false}
+															minTickGap={24}
+														/>
+														<YAxis
+															allowDecimals={false}
+															tickLine={false}
+															axisLine={false}
+														/>
+														<ChartTooltip
+															content={
+																<ChartTooltipContent
+																	labelKey="label"
+																	indicator="dashed"
+																/>
+															}
+														/>
+														<Bar
+															dataKey="successful"
+															stackId="builds"
+															fill="var(--color-successful)"
+															radius={[4, 4, 0, 0]}
+														/>
+														<Bar
+															dataKey="failed"
+															stackId="builds"
+															fill="var(--color-failed)"
+														/>
+														<Bar
+															dataKey="running"
+															stackId="builds"
+															fill="var(--color-running)"
+														/>
+													</BarChart>
+												</ChartContainer>
+											</CardContent>
+										</Card>
+
+										<Card className="bg-background">
+											<CardHeader>
+												<CardTitle>Success rate trend</CardTitle>
+												<CardDescription>
+													Percentage of successful completed builds in each time
+													bucket.
+												</CardDescription>
+											</CardHeader>
+											<CardContent>
+												<ChartContainer
+													config={successRateChartConfig}
+													className="h-72 w-full"
+												>
+													<AreaChart data={bucketRows}>
+														<CartesianGrid vertical={false} />
+														<XAxis
+															dataKey="label"
+															tickLine={false}
+															axisLine={false}
+															minTickGap={24}
+														/>
+														<YAxis
+															domain={[0, 100]}
+															tickFormatter={(value) => `${value}%`}
+															tickLine={false}
+															axisLine={false}
+														/>
+														<ChartTooltip
+															content={
+																<ChartTooltipContent
+																	labelKey="label"
+																	formatter={(value) => (
+																		<span className="font-mono font-medium text-foreground">
+																			{value == null ? "No data" : `${value}%`}
+																		</span>
+																	)}
+																/>
+															}
+														/>
+														<Area
+															type="monotone"
+															dataKey="successRatePercent"
+															stroke="var(--color-successRatePercent)"
+															fill="var(--color-successRatePercent)"
+															fillOpacity={0.18}
+														/>
+													</AreaChart>
+												</ChartContainer>
+											</CardContent>
+										</Card>
+									</div>
 								</CardContent>
 							</Card>
-						) : null}
 
-						{jobDetailsError ? (
-							<Alert variant="destructive">
-								<AlertTitle>Unable to load job details</AlertTitle>
-								<AlertDescription>{jobDetailsError}</AlertDescription>
-							</Alert>
-						) : null}
-
-						{jobActivityError ? (
-							<Alert variant="destructive">
-								<AlertTitle>Unable to load job activity</AlertTitle>
-								<AlertDescription>{jobActivityError}</AlertDescription>
-							</Alert>
-						) : null}
-
-						{!isLoadingJobDetails && !jobDetailsError && jobDetails ? (
-							<div className="grid gap-4 xl:grid-cols-2">
-								<BuildSummaryCard
-									title="Last build"
-									build={jobDetails.lastBuild}
-								/>
-								<BuildSummaryCard
-									title="Last completed"
-									build={jobDetails.lastCompletedBuild}
-								/>
-								<BuildSummaryCard
-									title="Last successful"
-									build={jobDetails.lastSuccessfulBuild}
-								/>
-								<BuildSummaryCard
-									title="Last failed"
-									build={jobDetails.lastFailedBuild}
-								/>
-								<Card className="xl:col-span-2">
-									<CardHeader>
-										<CardTitle>Job summary</CardTitle>
-										<CardDescription>
-											Overview of the selected Jenkins job.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-3">
-										<div className="flex flex-wrap items-center gap-2">
-											<Badge
-												variant={jobDetails.buildable ? "default" : "outline"}
+							<Card>
+								<CardHeader>
+									<CardTitle>Build list</CardTitle>
+									<CardDescription>
+										Recent builds constrained by the selected time range.
+									</CardDescription>
+								</CardHeader>
+								<CardContent className="flex flex-col gap-3">
+									{buildRows.length ? (
+										buildRows.map((build) => (
+											<div
+												key={build.id}
+												className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
 											>
-												{jobDetails.buildable ? "Buildable" : "Disabled"}
-											</Badge>
-											<Badge
-												variant={jobDetails.inQueue ? "secondary" : "outline"}
-											>
-												{jobDetails.inQueue ? "Queued" : "Not queued"}
-											</Badge>
-											{jobDetails.nextBuildNumber ? (
-												<Badge variant="outline">
-													Next build #{jobDetails.nextBuildNumber}
-												</Badge>
-											) : null}
-											{jobDetails.color ? (
-												<Badge variant="outline">{jobDetails.color}</Badge>
-											) : null}
-										</div>
+												<div className="flex min-w-0 items-start gap-3">
+													<div className="pt-0.5">{renderBuildIcon(build)}</div>
+													<div className="min-w-0">
+														<p className="truncate text-sm font-medium">
+															{build.displayName ?? `Build #${build.number}`}
+														</p>
+														<p className="mt-1 text-xs text-muted-foreground">
+															Started{" "}
+															{build.timestamp
+																? new Date(build.timestamp).toLocaleString()
+																: "Unknown"}
+														</p>
+													</div>
+												</div>
+												<div className="flex flex-wrap items-center gap-2">
+													<Badge variant={getBuildBadgeVariant(build)}>
+														{getBuildStatusLabel(build)}
+													</Badge>
+													<Badge variant="outline">#{build.number}</Badge>
+													<Badge variant="outline">
+														{formatDuration(build.duration)}
+													</Badge>
+												</div>
+											</div>
+										))
+									) : (
 										<p className="text-sm text-muted-foreground">
-											{jobDetails.description?.trim()
-												? jobDetails.description
-												: "No description is set for this Jenkins job."}
+											No builds found for the selected time range.
 										</p>
-									</CardContent>
-								</Card>
-								<Card className="xl:col-span-2">
-									<CardHeader>
-										<CardTitle>Observed state</CardTitle>
-										<CardDescription>
-											Last persisted monitoring snapshot for this job.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-										<InfoTile
-											label="Observed at"
-											value={
-												jobActivity?.snapshot?.observedAt
-													? new Date(
-															jobActivity.snapshot.observedAt,
-														).toLocaleString()
-													: "Not observed yet"
-											}
-										/>
-										<InfoTile
-											label="Source"
-											value={jobActivity?.snapshot?.source ?? "None"}
-										/>
-										<InfoTile
-											label="Last build"
-											value={
-												jobActivity?.snapshot?.lastBuildNumber != null
-													? `#${jobActivity.snapshot.lastBuildNumber}`
-													: "None"
-											}
-										/>
-										<InfoTile
-											label="Result"
-											value={
-												jobActivity?.snapshot?.lastBuildBuilding
-													? "Building"
-													: (jobActivity?.snapshot?.lastBuildResult ??
-														"Unknown")
-											}
-										/>
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader>
-										<CardTitle>Recent history</CardTitle>
-										<CardDescription>
-											Only status changes are persisted to avoid duplicate rows.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-3">
-										{jobActivity?.history.length ? (
-											jobActivity.history.map((entry) => (
-												<div
-													key={entry.id}
-													className="rounded-xl border bg-muted/20 px-4 py-3"
-												>
-													<div className="flex items-center justify-between gap-3">
-														<p className="text-sm font-medium">
-															{entry.lastBuildNumber != null
-																? `Build #${entry.lastBuildNumber}`
-																: "No build"}
-														</p>
-														<p className="text-xs text-muted-foreground">
-															{new Date(entry.observedAt).toLocaleString()}
-														</p>
-													</div>
-													<p className="mt-1 text-xs text-muted-foreground">
-														{entry.lastBuildBuilding
-															? "Building"
-															: (entry.lastBuildResult ?? "Unknown")}
-														{" · "}
-														{entry.color ?? "No color"}
-														{" · "}
-														{entry.inQueue ? "Queued" : "Idle"}
-													</p>
-												</div>
-											))
-										) : (
-											<p className="text-sm text-muted-foreground">
-												No persisted changes yet.
-											</p>
-										)}
-									</CardContent>
-								</Card>
-								<Card>
-									<CardHeader>
-										<CardTitle>Recent logs</CardTitle>
-										<CardDescription>
-											Repeated events are compacted instead of being appended on
-											every poll.
-										</CardDescription>
-									</CardHeader>
-									<CardContent className="space-y-3">
-										{jobActivity?.logs.length ? (
-											jobActivity.logs.map((entry) => (
-												<div
-													key={entry.id}
-													className="rounded-xl border bg-muted/20 px-4 py-3"
-												>
-													<div className="flex items-center justify-between gap-3">
-														<p className="text-sm font-medium">
-															{entry.level.toUpperCase()} · {entry.code}
-														</p>
-														<p className="text-xs text-muted-foreground">
-															{new Date(entry.lastSeenAt).toLocaleString()}
-														</p>
-													</div>
-													<p className="mt-1 text-sm">{entry.message}</p>
-													<p className="mt-1 text-xs text-muted-foreground">
-														Seen {entry.repeatCount} time
-														{entry.repeatCount === 1 ? "" : "s"}
-													</p>
-												</div>
-											))
-										) : (
-											<p className="text-sm text-muted-foreground">
-												No logs recorded yet.
-											</p>
-										)}
-									</CardContent>
-								</Card>
-							</div>
-						) : null}
-					</CardContent>
-				</Card>
+									)}
+								</CardContent>
+							</Card>
+						</>
+					) : null}
+				</div>
 			</div>
 		</div>
 	);
 }
 
-function getInstanceTitle(instance: JenkinsInstanceSummary): string {
-	try {
-		return new URL(instance.hostUrl).hostname;
-	} catch {
-		return instance.hostUrl;
+function formatPercent(value: number | null | undefined): string {
+	if (value == null) {
+		return "No data";
+	}
+
+	return `${Math.round(value * 100)}%`;
+}
+
+function getBuildStatusLabel(build: JenkinsJobBuildRecord): string {
+	if (build.building) {
+		return "Running";
+	}
+
+	switch (build.result) {
+		case "SUCCESS":
+			return "Success";
+		case "FAILURE":
+			return "Failure";
+		case "ABORTED":
+			return "Aborted";
+		case "UNSTABLE":
+			return "Unstable";
+		case "NOT_BUILT":
+			return "Not built";
+		default:
+			return build.result ?? "Unknown";
+	}
+}
+
+function getBuildBadgeVariant(
+	build: JenkinsJobBuildRecord,
+): "default" | "secondary" | "outline" | "destructive" {
+	if (build.building) {
+		return "secondary";
+	}
+
+	switch (build.resultCategory) {
+		case "success":
+			return "default";
+		case "failed":
+			return "destructive";
+		default:
+			return "outline";
+	}
+}
+
+function renderBuildIcon(build: JenkinsJobBuildRecord) {
+	if (build.building) {
+		return <Wrench className="text-muted-foreground" />;
+	}
+
+	switch (build.resultCategory) {
+		case "success":
+			return <CheckCircle2 className="text-muted-foreground" />;
+		case "failed":
+			return <TriangleAlert className="text-muted-foreground" />;
+		default:
+			return <Wrench className="text-muted-foreground" />;
 	}
 }

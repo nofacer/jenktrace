@@ -355,6 +355,54 @@ export function JobDialog({
 						</p>
 					</div>
 
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="retentionDays">
+							Build history retention (days)
+						</Label>
+						<Input
+							id="retentionDays"
+							type="number"
+							min="1"
+							max="3650"
+							step="1"
+							value={formState.retentionDays}
+							onChange={(event) =>
+								onFormStateChange((current) => ({
+									...current,
+									retentionDays: event.target.value,
+								}))
+							}
+							placeholder="90"
+						/>
+						<p className="text-xs text-muted-foreground">
+							Default is 90 days. Older persisted builds will be pruned for this
+							job.
+						</p>
+					</div>
+
+					<div className="flex flex-col gap-2">
+						<Label htmlFor="maxBuilds">Maximum persisted builds</Label>
+						<Input
+							id="maxBuilds"
+							type="number"
+							min="1"
+							max="100000"
+							step="1"
+							value={formState.maxBuilds}
+							onChange={(event) =>
+								onFormStateChange((current) => ({
+									...current,
+									maxBuilds: event.target.value,
+								}))
+							}
+							placeholder="1000"
+						/>
+						<p className="text-xs text-muted-foreground">
+							Default is 1000 builds. Older rows beyond this cap will be pruned
+							even if they are still within retention days.
+						</p>
+					</div>
+
 					{formState.fullProjectName.trim() ? (
 						<div className="grid gap-3 md:grid-cols-2">
 							<InfoTile
