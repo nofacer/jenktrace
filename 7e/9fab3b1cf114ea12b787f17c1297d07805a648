@@ -1,0 +1,40 @@
+src/bun/runtime-paths.ts
+  s_08f7d84f0d2dc2::t_c7798124317d36 1-38,42-56,58-66
+  s_08f7d84f0d2dc2::t_af910bf9058954 39-41,57
+src/bun/jenkins-store.ts
+  s_08f7d84f0d2dc2::t_18bd1b7eb36b46 2,113-117
+  s_08f7d84f0d2dc2::t_51dda2ea764d7f 41,43
+electrobun.config.ts
+  s_08f7d84f0d2dc2::t_014438ac048e70 19
+  s_08f7d84f0d2dc2::t_219c5bf034991e 20
+scripts/keep-only-dmg.mjs
+  s_08f7d84f0d2dc2::t_014438ac048e70 1-25
+package.json
+  s_08f7d84f0d2dc2::t_014438ac048e70 12-13
+src/bun/electrobun-native.ts
+  s_08f7d84f0d2dc2::t_2f812ef45f503b 8-11
+  s_08f7d84f0d2dc2::t_ef8b689e9eef09 1-4,16
+.github/workflows/ci.yml
+  s_08f7d84f0d2dc2::t_014438ac048e70 14,57,66
+src/bun/index.ts
+  s_08f7d84f0d2dc2::t_cc2fbeed1e2ea9 25,35
+  s_08f7d84f0d2dc2::t_8edd0934ea0c7c 13
+  s_08f7d84f0d2dc2::t_4664a42a6e26bd 1,139-141
+  s_08f7d84f0d2dc2::t_cd23f7d1233852 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7e9fab3b1cf114ea12b787f17c1297d07805a648",
+  "prompts": {},
+  "sessions": {
+    "s_08f7d84f0d2dc2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e8252-37ec-73a0-a741-15bf373598d3",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
