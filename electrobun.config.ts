@@ -2,8 +2,8 @@ import type { ElectrobunConfig } from "electrobun";
 
 export default {
 	app: {
-		name: "react-tailwind-vite",
-		identifier: "reacttailwindvite.electrobun.dev",
+		name: "jenktrace",
+		identifier: "dev.electrobun.jenktrace",
 		version: "0.0.1",
 	},
 	build: {
@@ -16,12 +16,15 @@ export default {
 		watchIgnore: ["dist/**"],
 		mac: {
 			bundleCEF: false,
+			createDmg: false,
 		},
 		linux: {
 			bundleCEF: false,
+			icon: "assets/icon-1024.png",
 		},
 		win: {
 			bundleCEF: false,
+			icon: "assets/icon-1024.png",
 		},
 	},
 } satisfies ElectrobunConfig;

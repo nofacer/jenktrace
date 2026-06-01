@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import {
 	ApplicationMenu,
 	BrowserView,
@@ -13,6 +14,7 @@ import type {
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
 import type { AppRPCSchema } from "../shared/rpc";
+import { native } from "./electrobun-native";
 import {
 	deleteJenkinsInstance,
 	getJenkinsBuildLog,
@@ -28,6 +30,7 @@ import {
 const DEV_SERVER_PORT = 5173;
 const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
 const MONITORING_TICK_MS = 60_000;
+const APP_ICON_PATH = join(import.meta.dir, "../../assets/icon-1024-mac.png");
 let monitoringRunInFlight = false;
 
 // Check if Vite dev server is running for HMR
@@ -124,8 +127,8 @@ ApplicationMenu.setApplicationMenu([
 	},
 ]);
 
-new BrowserWindow({
-	title: "React + Tailwind + Vite",
+const mainWindow = new BrowserWindow({
+	title: "jenktrace",
 	url,
 	rpc: appRpc,
 	frame: {
@@ -136,7 +139,9 @@ new BrowserWindow({
 	},
 });
 
-console.log("React Tailwind Vite app started!");
+native?.symbols.setWindowIcon(mainWindow.ptr, APP_ICON_PATH);
+
+console.log("jenktrace app started!");
 void runMonitoringTick();
 setInterval(() => {
 	void runMonitoringTick();

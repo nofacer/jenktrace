@@ -5,11 +5,14 @@ on:
     branches:
       - main
       - master
+    tags:
+      - "*"
   pull_request:
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.ref_type != 'tag'
 
     steps:
       - name: Checkout
@@ -25,3 +28,41 @@ jobs:
 
       - name: Run checks
         run: bun run check
+
+  release:
+    runs-on: macos-latest
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build stable release artifacts
+        run: bun run build:stable
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.ref_name }}-artifacts
+          path: artifacts/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: |
+            artifacts/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -1,6 +1,6 @@
-# React + shadcn + Vite Electrobun Template
+# jenktrace
 
-A fast Electrobun desktop app template with React, Tailwind CSS v4, shadcn/base UI, and Vite for hot module replacement (HMR).
+A fast Electrobun desktop app for Jenkins monitoring, built with React, Tailwind CSS v4, shadcn/base UI, and Vite for hot module replacement (HMR).
 
 ## Getting Started
 
@@ -28,6 +28,9 @@ bun run build
 
 # Build for production release
 bun run build:canary
+
+# Build a stable release artifact
+bun run build:stable
 ```
 
 ## How HMR Works
@@ -81,7 +84,7 @@ When you run `bun run dev` (without HMR):
 - `bun run format`: format the codebase with Biome
 - `bun run check`: run lint, TypeScript, and production build together
 
-GitHub Actions runs `bun run check` on pushes and pull requests.
+GitHub Actions runs `bun run check` on pushes and pull requests. When you push a tag, GitHub Actions runs `bun run build:stable`, uploads `artifacts/*` to the workflow run, and publishes the same files on the GitHub Release for that tag.
 
 ## Git Hooks
 
