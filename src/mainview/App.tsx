@@ -1,19 +1,42 @@
-import { Dialog } from "@base-ui/react";
 import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogMedia,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
+	CardAction,
 	CardContent,
 	CardDescription,
+	CardFooter,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import {
+	Dialog,
+	DialogClose,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
 	Tooltip,
 	TooltipContent,
@@ -496,20 +519,28 @@ export default function App() {
 							const isActive = instance.id === selectedInstanceId;
 
 							return (
-								<button
+								<Button
 									type="button"
 									key={instance.id}
+									size="icon-lg"
+									variant={isActive ? "default" : "outline"}
 									title={getInstanceTitle(instance)}
 									onClick={() => setSelectedInstanceId(instance.id)}
-									className={cn(
-										"flex size-12 items-center justify-center rounded-xl border text-xs font-semibold transition-colors",
-										isActive
-											? "border-primary bg-primary text-primary-foreground"
-											: "border-border bg-background hover:bg-accent hover:text-accent-foreground",
-									)}
+									className="size-12 rounded-xl p-0"
 								>
-									{summarizeInstance(instance)}
-								</button>
+									<Avatar className="size-10" size="lg">
+										<AvatarFallback
+											className={cn(
+												"text-xs font-semibold",
+												isActive
+													? "bg-primary text-primary-foreground"
+													: "bg-background text-foreground",
+											)}
+										>
+											{summarizeInstance(instance)}
+										</AvatarFallback>
+									</Avatar>
+								</Button>
 							);
 						})}
 					</div>
@@ -519,24 +550,26 @@ export default function App() {
 					<div className="flex w-80 shrink-0 flex-col border-r bg-background">
 						<div className="flex flex-col gap-3 px-5 py-4">
 							{selectedInstance ? (
-								<div className="rounded-2xl border bg-muted/30 p-4">
-									<div className="flex items-start justify-between gap-3">
-										<div className="min-w-0">
-											<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-												Instance
-											</p>
-											<p className="mt-2 truncate text-sm font-semibold">
-												{getInstanceTitle(selectedInstance)}
-											</p>
-											<p className="mt-1 truncate text-xs text-muted-foreground">
-												{selectedInstance.username}
-											</p>
-										</div>
-										<Badge variant="outline">
-											{selectedInstance.jobs.length} jobs
-										</Badge>
-									</div>
-									<div className="mt-3 flex items-center gap-2">
+								<Card className="bg-muted/30">
+									<CardHeader>
+										<CardTitle className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+											Instance
+										</CardTitle>
+										<CardDescription className="truncate text-sm font-semibold text-foreground">
+											{getInstanceTitle(selectedInstance)}
+										</CardDescription>
+										<CardAction>
+											<Badge variant="outline">
+												{selectedInstance.jobs.length} jobs
+											</Badge>
+										</CardAction>
+									</CardHeader>
+									<CardContent>
+										<p className="truncate text-xs text-muted-foreground">
+											{selectedInstance.username}
+										</p>
+									</CardContent>
+									<CardFooter className="gap-2">
 										<Button
 											size="icon-sm"
 											variant="outline"
@@ -558,8 +591,8 @@ export default function App() {
 										>
 											<Trash2 />
 										</Button>
-									</div>
-								</div>
+									</CardFooter>
+								</Card>
 							) : null}
 
 							<div className="flex items-center justify-between">
@@ -583,39 +616,37 @@ export default function App() {
 						<div className="flex-1 overflow-y-auto p-3">
 							{isLoading ? (
 								<Card size="sm">
-									<CardContent className="py-2 text-muted-foreground">
-										Loading instances...
+									<CardHeader>
+										<Skeleton className="h-4 w-28" />
+										<Skeleton className="h-3 w-40" />
+									</CardHeader>
+									<CardContent className="flex flex-col gap-2">
+										<Skeleton className="h-14 w-full rounded-xl" />
+										<Skeleton className="h-14 w-full rounded-xl" />
+										<Skeleton className="h-14 w-full rounded-xl" />
 									</CardContent>
 								</Card>
 							) : null}
 
 							{!isLoading && !selectedInstance ? (
-								<Card>
-									<CardHeader>
-										<CardTitle>No instance selected</CardTitle>
-										<CardDescription>
-											Pick an instance from the left rail or create a new one.
-										</CardDescription>
-									</CardHeader>
-								</Card>
+								<EmptyStateCard
+									title="No instance selected"
+									description="Pick an instance from the left rail or create a new one."
+								/>
 							) : null}
 
 							{!isLoading &&
 							selectedInstance &&
 							selectedInstance.jobs.length === 0 ? (
-								<Card>
-									<CardHeader>
-										<CardTitle>No jobs configured</CardTitle>
-										<CardDescription>
-											This instance does not have any jobs assigned yet.
-										</CardDescription>
-									</CardHeader>
-									<CardContent>
+								<EmptyStateCard
+									title="No jobs configured"
+									description="This instance does not have any jobs assigned yet."
+									action={
 										<Button size="sm" onClick={openCreateJobDialog}>
 											Add the first job
 										</Button>
-									</CardContent>
-								</Card>
+									}
+								/>
 							) : null}
 
 							{!isLoading &&
@@ -811,22 +842,30 @@ export default function App() {
 									</div>
 
 									{isLoadingJobDetails ? (
-										<div className="rounded-2xl border border-dashed bg-background/70 p-6">
-											<p className="text-sm font-medium">Loading job details</p>
-											<p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-												Fetching the selected Jenkins job and recent build
-												metadata.
-											</p>
-										</div>
+										<Card className="border-dashed bg-background/70">
+											<CardHeader>
+												<CardTitle>Loading job details</CardTitle>
+												<CardDescription>
+													Fetching the selected Jenkins job and recent build
+													metadata.
+												</CardDescription>
+											</CardHeader>
+											<CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+												<Skeleton className="h-20 w-full rounded-xl" />
+												<Skeleton className="h-20 w-full rounded-xl" />
+												<Skeleton className="h-20 w-full rounded-xl" />
+												<Skeleton className="h-20 w-full rounded-xl" />
+												<Skeleton className="h-20 w-full rounded-xl" />
+												<Skeleton className="h-20 w-full rounded-xl" />
+											</CardContent>
+										</Card>
 									) : null}
 
 									{jobDetailsError ? (
-										<div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-6 text-destructive">
-											<p className="text-sm font-medium">
-												Unable to load job details
-											</p>
-											<p className="mt-2 text-sm">{jobDetailsError}</p>
-										</div>
+										<Alert variant="destructive">
+											<AlertTitle>Unable to load job details</AlertTitle>
+											<AlertDescription>{jobDetailsError}</AlertDescription>
+										</Alert>
 									) : null}
 
 									{!isLoadingJobDetails && !jobDetailsError && jobDetails ? (
@@ -896,295 +935,267 @@ export default function App() {
 					</div>
 				</section>
 
-				<Dialog.Root
+				<AlertDialog
 					open={isDeleteDialogOpen}
 					onOpenChange={setIsDeleteDialogOpen}
-					modal
 				>
-					<Dialog.Portal>
-						<Dialog.Backdrop className="fixed inset-0 bg-black/35 backdrop-blur-sm" />
-						<Dialog.Popup className="fixed top-1/2 left-1/2 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-background shadow-2xl outline-none">
-							<div className="border-b px-6 py-4">
-								<Dialog.Title className="text-base font-semibold">
-									Delete Jenkins instance
-								</Dialog.Title>
-								<Dialog.Description className="mt-1 text-sm text-muted-foreground">
-									{selectedInstance
-										? `Delete "${getInstanceTitle(selectedInstance)}"? This also removes its saved jobs and API key reference.`
-										: "Delete the selected Jenkins instance."}
-								</Dialog.Description>
-							</div>
+					<AlertDialogContent size="sm">
+						<AlertDialogHeader>
+							<AlertDialogMedia>
+								<Trash2 />
+							</AlertDialogMedia>
+							<AlertDialogTitle>Delete Jenkins instance</AlertDialogTitle>
+							<AlertDialogDescription>
+								{selectedInstance
+									? `Delete "${getInstanceTitle(selectedInstance)}"? This also removes its saved jobs and API key reference.`
+									: "Delete the selected Jenkins instance."}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
 
-							<div className="flex items-center justify-end gap-2 border-t px-6 py-4">
-								<Dialog.Close className="inline-flex">
-									<Button variant="ghost" disabled={isDeleting}>
-										Cancel
-									</Button>
-								</Dialog.Close>
-								<Button
-									variant="destructive"
-									onClick={handleDelete}
-									disabled={isDeleting || !selectedInstance}
-								>
-									{isDeleting ? "Deleting..." : "Delete instance"}
-								</Button>
-							</div>
-						</Dialog.Popup>
-					</Dialog.Portal>
-				</Dialog.Root>
+						{errorMessage ? (
+							<Alert variant="destructive">
+								<AlertTitle>Delete failed</AlertTitle>
+								<AlertDescription>{errorMessage}</AlertDescription>
+							</Alert>
+						) : null}
 
-				<Dialog.Root
+						<AlertDialogFooter>
+							<AlertDialogCancel disabled={isDeleting}>
+								Cancel
+							</AlertDialogCancel>
+							<AlertDialogAction
+								variant="destructive"
+								onClick={handleDelete}
+								disabled={isDeleting || !selectedInstance}
+							>
+								{isDeleting ? "Deleting..." : "Delete instance"}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+
+				<AlertDialog
 					open={isDeleteJobDialogOpen}
 					onOpenChange={setIsDeleteJobDialogOpen}
-					modal
 				>
-					<Dialog.Portal>
-						<Dialog.Backdrop className="fixed inset-0 bg-black/35 backdrop-blur-sm" />
-						<Dialog.Popup className="fixed top-1/2 left-1/2 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-background shadow-2xl outline-none">
-							<div className="border-b px-6 py-4">
-								<Dialog.Title className="text-base font-semibold">
-									Delete saved job
-								</Dialog.Title>
-								<Dialog.Description className="mt-1 text-sm text-muted-foreground">
-									{selectedInstance && selectedJob
-										? `Remove "${selectedJob}" from "${getInstanceTitle(selectedInstance)}"? This only removes the local saved job entry and does not delete the Jenkins job itself.`
-										: "Delete the selected saved job."}
-								</Dialog.Description>
-							</div>
+					<AlertDialogContent size="sm">
+						<AlertDialogHeader>
+							<AlertDialogMedia>
+								<Trash2 />
+							</AlertDialogMedia>
+							<AlertDialogTitle>Delete saved job</AlertDialogTitle>
+							<AlertDialogDescription>
+								{selectedInstance && selectedJob
+									? `Remove "${selectedJob}" from "${getInstanceTitle(selectedInstance)}"? This only removes the local saved job entry and does not delete the Jenkins job itself.`
+									: "Delete the selected saved job."}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
 
-							{deleteJobErrorMessage ? (
-								<div className="px-6 pt-4">
-									<div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-										{deleteJobErrorMessage}
-									</div>
-								</div>
-							) : null}
+						{deleteJobErrorMessage ? (
+							<Alert variant="destructive">
+								<AlertTitle>Delete failed</AlertTitle>
+								<AlertDescription>{deleteJobErrorMessage}</AlertDescription>
+							</Alert>
+						) : null}
 
-							<div className="flex items-center justify-end gap-2 border-t px-6 py-4">
-								<Dialog.Close className="inline-flex">
-									<Button variant="ghost" disabled={isDeletingJob}>
-										Cancel
-									</Button>
-								</Dialog.Close>
-								<Button
-									variant="destructive"
-									onClick={handleDeleteJob}
-									disabled={isDeletingJob || !selectedJob || !selectedInstance}
-								>
-									{isDeletingJob ? "Deleting..." : "Delete job"}
-								</Button>
-							</div>
-						</Dialog.Popup>
-					</Dialog.Portal>
-				</Dialog.Root>
+						<AlertDialogFooter>
+							<AlertDialogCancel disabled={isDeletingJob}>
+								Cancel
+							</AlertDialogCancel>
+							<AlertDialogAction
+								variant="destructive"
+								onClick={handleDeleteJob}
+								disabled={isDeletingJob || !selectedJob || !selectedInstance}
+							>
+								{isDeletingJob ? "Deleting..." : "Delete job"}
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 
-				<Dialog.Root
+				<Dialog
 					open={isInstanceDialogOpen}
 					onOpenChange={setIsInstanceDialogOpen}
-					modal
 				>
-					<Dialog.Portal>
-						<Dialog.Backdrop className="fixed inset-0 bg-black/35 backdrop-blur-sm" />
-						<Dialog.Popup className="fixed top-1/2 left-1/2 w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-background shadow-2xl outline-none">
-							<div className="flex items-center justify-between border-b px-6 py-4">
-								<div>
-									<Dialog.Title className="text-base font-semibold">
-										{instanceDialogMode === "create"
-											? "Create Jenkins instance"
-											: "Edit Jenkins instance"}
-									</Dialog.Title>
-									<Dialog.Description className="mt-1 text-sm text-muted-foreground">
-										Manage only the Jenkins connection information here.
-									</Dialog.Description>
-								</div>
-								<Dialog.Close className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-									Close
-								</Dialog.Close>
-							</div>
+					<DialogContent className="sm:max-w-[42rem]">
+						<DialogHeader className="pr-8">
+							<DialogTitle>
+								{instanceDialogMode === "create"
+									? "Create Jenkins instance"
+									: "Edit Jenkins instance"}
+							</DialogTitle>
+							<DialogDescription>
+								Manage only the Jenkins connection information here.
+							</DialogDescription>
+						</DialogHeader>
 
-							<div className="flex flex-col gap-5 px-6 py-5">
-								<div className="grid gap-4 md:grid-cols-2">
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="hostUrl">Host URL</Label>
-										<Input
-											id="hostUrl"
-											value={instanceFormState.hostUrl}
-											onChange={(event) =>
-												setInstanceFormState((current) => ({
-													...current,
-													hostUrl: event.target.value,
-												}))
-											}
-											placeholder="https://jenkins.example.com"
-										/>
-									</div>
-
-									<div className="flex flex-col gap-2">
-										<Label htmlFor="username">Username</Label>
-										<Input
-											id="username"
-											value={instanceFormState.username}
-											onChange={(event) =>
-												setInstanceFormState((current) => ({
-													...current,
-													username: event.target.value,
-												}))
-											}
-											placeholder="automation-bot"
-										/>
-									</div>
-								</div>
-
+						<div className="flex flex-col gap-5">
+							<div className="grid gap-4 md:grid-cols-2">
 								<div className="flex flex-col gap-2">
-									<Label htmlFor="apiKey">API key</Label>
+									<Label htmlFor="hostUrl">Host URL</Label>
 									<Input
-										id="apiKey"
-										type="password"
-										value={instanceFormState.apiKey}
+										id="hostUrl"
+										value={instanceFormState.hostUrl}
 										onChange={(event) =>
 											setInstanceFormState((current) => ({
 												...current,
-												apiKey: event.target.value,
+												hostUrl: event.target.value,
 											}))
 										}
-										placeholder={
-											instanceDialogMode === "edit"
-												? "Leave blank to keep the saved key"
-												: "Paste Jenkins API key"
-										}
+										placeholder="https://jenkins.example.com"
 									/>
 								</div>
 
-								{errorMessage ? (
-									<div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-										{errorMessage}
-									</div>
-								) : null}
+								<div className="flex flex-col gap-2">
+									<Label htmlFor="username">Username</Label>
+									<Input
+										id="username"
+										value={instanceFormState.username}
+										onChange={(event) =>
+											setInstanceFormState((current) => ({
+												...current,
+												username: event.target.value,
+											}))
+										}
+										placeholder="automation-bot"
+									/>
+								</div>
+							</div>
 
-								{testResult ? (
-									<div
-										className={cn(
-											"rounded-xl border px-4 py-3 text-sm",
-											testResult.ok
-												? "border-green-600/25 bg-green-600/10 text-green-700"
-												: "border-destructive/30 bg-destructive/10 text-destructive",
-										)}
-									>
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="apiKey">API key</Label>
+								<Input
+									id="apiKey"
+									type="password"
+									value={instanceFormState.apiKey}
+									onChange={(event) =>
+										setInstanceFormState((current) => ({
+											...current,
+											apiKey: event.target.value,
+										}))
+									}
+									placeholder={
+										instanceDialogMode === "edit"
+											? "Leave blank to keep the saved key"
+											: "Paste Jenkins API key"
+									}
+								/>
+							</div>
+
+							{errorMessage ? (
+								<Alert variant="destructive">
+									<AlertTitle>Save failed</AlertTitle>
+									<AlertDescription>{errorMessage}</AlertDescription>
+								</Alert>
+							) : null}
+
+							{testResult ? (
+								<Alert variant={testResult.ok ? "default" : "destructive"}>
+									<AlertTitle>
+										{testResult.ok
+											? "Connection succeeded"
+											: "Connection failed"}
+									</AlertTitle>
+									<AlertDescription>
 										<p>{testResult.message}</p>
 										{testResult.jenkinsVersion ? (
-											<p className="mt-1 text-xs opacity-80">
-												Jenkins {testResult.jenkinsVersion}
-											</p>
+											<p>Jenkins {testResult.jenkinsVersion}</p>
 										) : null}
-									</div>
-								) : null}
-							</div>
+									</AlertDescription>
+								</Alert>
+							) : null}
+						</div>
 
-							<div className="flex items-center justify-between border-t px-6 py-4">
-								<Button
-									variant="outline"
-									onClick={handleTestConnection}
-									disabled={isTesting || isSaving}
-								>
-									{isTesting ? "Testing..." : "Test connection"}
+						<div className="flex items-center justify-between gap-2 border-t pt-4">
+							<Button
+								variant="outline"
+								onClick={handleTestConnection}
+								disabled={isTesting || isSaving}
+							>
+								{isTesting ? "Testing..." : "Test connection"}
+							</Button>
+
+							<div className="flex items-center gap-2">
+								<DialogClose render={<Button variant="ghost" />}>
+									Cancel
+								</DialogClose>
+								<Button onClick={handleSave} disabled={isSaving || isDeleting}>
+									{isSaving ? "Saving..." : "Save"}
 								</Button>
-
-								<div className="flex items-center gap-2">
-									<Dialog.Close className="inline-flex">
-										<Button variant="ghost">Cancel</Button>
-									</Dialog.Close>
-									<Button
-										onClick={handleSave}
-										disabled={isSaving || isDeleting}
-									>
-										{isSaving ? "Saving..." : "Save"}
-									</Button>
-								</div>
 							</div>
-						</Dialog.Popup>
-					</Dialog.Portal>
-				</Dialog.Root>
+						</div>
+					</DialogContent>
+				</Dialog>
 
-				<Dialog.Root
-					open={isJobDialogOpen}
-					onOpenChange={setIsJobDialogOpen}
-					modal
-				>
-					<Dialog.Portal>
-						<Dialog.Backdrop className="fixed inset-0 bg-black/35 backdrop-blur-sm" />
-						<Dialog.Popup className="fixed top-1/2 left-1/2 w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-background shadow-2xl outline-none">
-							<div className="flex items-center justify-between border-b px-6 py-4">
-								<div>
-									<Dialog.Title className="text-base font-semibold">
-										{jobDialogMode === "create" ? "Add job" : "Edit job"}
-									</Dialog.Title>
-									<Dialog.Description className="mt-1 text-sm text-muted-foreground">
-										Use Full project name as the unique identifier for each job.
-									</Dialog.Description>
-								</div>
-								<Dialog.Close className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground">
-									Close
-								</Dialog.Close>
+				<Dialog open={isJobDialogOpen} onOpenChange={setIsJobDialogOpen}>
+					<DialogContent className="sm:max-w-[36rem]">
+						<DialogHeader className="pr-8">
+							<DialogTitle>
+								{jobDialogMode === "create" ? "Add job" : "Edit job"}
+							</DialogTitle>
+							<DialogDescription>
+								Use Full project name as the unique identifier for each job.
+							</DialogDescription>
+						</DialogHeader>
+
+						<div className="flex flex-col gap-5">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="fullProjectName">Full project name</Label>
+								<Input
+									id="fullProjectName"
+									value={jobFormState.fullProjectName}
+									onChange={(event) =>
+										setJobFormState((current) => ({
+											...current,
+											fullProjectName: event.target.value,
+										}))
+									}
+									placeholder="folder1/test"
+								/>
+								<p className="text-xs text-muted-foreground">
+									Example: <code>folder1/test</code> maps to{" "}
+									<code>/job/folder1/job/test/</code>.
+								</p>
 							</div>
 
-							<div className="flex flex-col gap-5 px-6 py-5">
-								<div className="flex flex-col gap-2">
-									<Label htmlFor="fullProjectName">Full project name</Label>
-									<Input
-										id="fullProjectName"
-										value={jobFormState.fullProjectName}
-										onChange={(event) =>
-											setJobFormState((current) => ({
-												...current,
-												fullProjectName: event.target.value,
-											}))
-										}
-										placeholder="folder1/test"
+							{jobFormState.fullProjectName.trim() ? (
+								<div className="grid gap-3 md:grid-cols-2">
+									<InfoTile
+										label="Normalized path"
+										value={buildJenkinsJobPath(jobFormState.fullProjectName)}
 									/>
-									<p className="text-xs text-muted-foreground">
-										Example: <code>folder1/test</code> maps to{" "}
-										<code>/job/folder1/job/test/</code>.
-									</p>
+									<InfoTile
+										label="Resolved URL"
+										value={
+											selectedInstance
+												? buildJenkinsJobUrl(
+														selectedInstance.hostUrl,
+														jobFormState.fullProjectName,
+													)
+												: "None"
+										}
+									/>
 								</div>
+							) : null}
 
-								{jobFormState.fullProjectName.trim() ? (
-									<div className="grid gap-3 md:grid-cols-2">
-										<InfoTile
-											label="Normalized path"
-											value={buildJenkinsJobPath(jobFormState.fullProjectName)}
-										/>
-										<InfoTile
-											label="Resolved URL"
-											value={
-												selectedInstance
-													? buildJenkinsJobUrl(
-															selectedInstance.hostUrl,
-															jobFormState.fullProjectName,
-														)
-													: "None"
-											}
-										/>
-									</div>
-								) : null}
+							{jobErrorMessage ? (
+								<Alert variant="destructive">
+									<AlertTitle>Save failed</AlertTitle>
+									<AlertDescription>{jobErrorMessage}</AlertDescription>
+								</Alert>
+							) : null}
+						</div>
 
-								{jobErrorMessage ? (
-									<div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-										{jobErrorMessage}
-									</div>
-								) : null}
-							</div>
-
-							<div className="flex items-center justify-end gap-2 border-t px-6 py-4">
-								<Dialog.Close className="inline-flex">
-									<Button variant="ghost">Cancel</Button>
-								</Dialog.Close>
-								<Button onClick={handleSaveJob} disabled={isSavingJob}>
-									{isSavingJob ? "Saving..." : "Save"}
-								</Button>
-							</div>
-						</Dialog.Popup>
-					</Dialog.Portal>
-				</Dialog.Root>
+						<div className="flex items-center justify-end gap-2 border-t pt-4">
+							<DialogClose render={<Button variant="ghost" />}>
+								Cancel
+							</DialogClose>
+							<Button onClick={handleSaveJob} disabled={isSavingJob}>
+								{isSavingJob ? "Saving..." : "Save"}
+							</Button>
+						</div>
+					</DialogContent>
+				</Dialog>
 			</div>
 		</TooltipProvider>
 	);
@@ -1218,14 +1229,38 @@ function ActionIconButton({
 	);
 }
 
+function EmptyStateCard({
+	title,
+	description,
+	action,
+}: {
+	title: string;
+	description: string;
+	action?: ReactNode;
+}) {
+	return (
+		<Card>
+			<CardHeader>
+				<CardTitle>{title}</CardTitle>
+				<CardDescription>{description}</CardDescription>
+			</CardHeader>
+			{action ? <CardFooter>{action}</CardFooter> : null}
+		</Card>
+	);
+}
+
 function InfoTile({ label, value }: { label: string; value: string }) {
 	return (
-		<div className="rounded-2xl border bg-background p-4">
-			<p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-				{label}
-			</p>
-			<p className="mt-2 truncate text-sm font-medium">{value}</p>
-		</div>
+		<Card size="sm" className="bg-background">
+			<CardHeader className="gap-2">
+				<CardTitle className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+					{label}
+				</CardTitle>
+				<CardDescription className="truncate text-sm font-medium text-foreground">
+					{value}
+				</CardDescription>
+			</CardHeader>
+		</Card>
 	);
 }
 
