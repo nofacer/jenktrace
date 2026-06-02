@@ -45,14 +45,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { appRpc } from "@/lib/app-rpc";
 import { cn } from "@/lib/utils";
-import type {
-	JenkinsBuildLogRecord,
-	JenkinsBuildTimeRange,
-	JenkinsInstanceSummary,
-	JenkinsJobActivity,
-	JenkinsJobAnalytics,
-	JenkinsJobBuildRecord,
-	JenkinsJobDetails,
+import {
+	getJenkinsInstanceDisplayName,
+	type JenkinsBuildLogRecord,
+	type JenkinsBuildTimeRange,
+	type JenkinsInstanceSummary,
+	type JenkinsJobActivity,
+	type JenkinsJobAnalytics,
+	type JenkinsJobBuildRecord,
+	type JenkinsJobDetails,
 } from "../../../shared/jenkins";
 import { ActionIconButton, formatDuration, InfoTile } from "./ui";
 
@@ -181,7 +182,10 @@ export function DetailsPanel({
 			<div className="flex items-center justify-between px-6 py-5">
 				<div>
 					<h1 className="text-lg font-semibold">
-						{selectedJob ?? selectedInstance?.hostUrl ?? "Job details"}
+						{selectedJob ??
+							(selectedInstance
+								? getJenkinsInstanceDisplayName(selectedInstance)
+								: "Job details")}
 					</h1>
 					<p className="text-sm text-muted-foreground">
 						Build analytics and recent build history.

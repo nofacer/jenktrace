@@ -32,4 +32,5 @@ Current published notes:
 - [v1.0.1](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.1.md)
 - [v1.0.2](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.2.md)
 - [v1.0.3](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.3.md)
+- [v1.0.5](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.5.md)
 - [v1.0.4](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.4.md)

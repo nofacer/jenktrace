@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -14,6 +15,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import type { JenkinsJobDetails } from "../../../shared/jenkins";
 
 export function ActionIconButton({
@@ -61,6 +63,41 @@ export function EmptyStateCard({
 			</CardHeader>
 			{action ? <CardFooter>{action}</CardFooter> : null}
 		</Card>
+	);
+}
+export function InstanceAvatarMark({
+	label,
+	colors,
+	className,
+	labelClassName,
+	size = "lg",
+}: {
+	label: string;
+	colors?: { backgroundColor: string; foregroundColor: string };
+	className?: string;
+	labelClassName?: string;
+	size?: "default" | "sm" | "lg";
+}) {
+	return (
+		<Avatar className={className} size={size}>
+			<AvatarFallback
+				className={cn(
+					"text-xs font-semibold tracking-[0.12em]",
+					!colors && "bg-background text-foreground",
+					labelClassName,
+				)}
+				style={
+					colors
+						? {
+								backgroundColor: colors.backgroundColor,
+								color: colors.foregroundColor,
+							}
+						: undefined
+				}
+			>
+				{label}
+			</AvatarFallback>
+		</Avatar>
 	);
 }
 

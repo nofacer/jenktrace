@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
 	buildJenkinsJobUrl,
+	getJenkinsInstanceDisplayName,
 	type JenkinsBuildLogInput,
 	type JenkinsBuildLogRecord,
 	type JenkinsConnectionTestInput,
@@ -785,6 +786,51 @@ async function ensureConfigDir() {
 	await mkdir(CONFIG_DIR, { recursive: true });
 }
 
+function normalizeStoredOptionalText(value: unknown): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const trimmed = value.trim();
+	return trimmed ? trimmed : undefined;
+}
+
+function normalizeStoredIconLabel(value: unknown): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const collapsed = value
+		.match(/[a-zA-Z0-9]+/g)
+		?.join("")
+		.toUpperCase();
+	return collapsed ? collapsed.slice(0, 3) : undefined;
+}
+
+function normalizeStoredIconBackgroundColor(
+	value: unknown,
+): string | undefined {
+	if (typeof value !== "string") {
+		return undefined;
+	}
+
+	const trimmed = value.trim();
+
+	if (!trimmed) {
+		return undefined;
+	}
+
+	if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+		const [, red, green, blue] = trimmed;
+		return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
+	}
+
+	if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+		return trimmed.toLowerCase();
+	}
+
+	return undefined;
+}
 async function readConfig(): Promise<StoredConfig> {
 	if (!existsSync(CONFIG_PATH)) {
 		return { instances: [] };
@@ -796,6 +842,11 @@ async function readConfig(): Promise<StoredConfig> {
 		instances: Array.isArray(parsed.instances)
 			? parsed.instances.map((instance) => ({
 					...instance,
+					customName: normalizeStoredOptionalText(instance.customName),
+					iconLabel: normalizeStoredIconLabel(instance.iconLabel),
+					iconBackgroundColor: normalizeStoredIconBackgroundColor(
+						instance.iconBackgroundColor,
+					),
 					disableSslVerification: instance.disableSslVerification ?? false,
 					jobs: Array.isArray(instance.jobs) ? instance.jobs : [],
 					jobRetentionDays: normalizeJobRetentionDays(
@@ -973,9 +1024,17 @@ export async function listJenkinsInstances(): Promise<
 	JenkinsInstanceSummary[]
 > {
 	const config = await readConfig();
-	const instances = [...config.instances].sort((left, right) =>
-		left.hostUrl.localeCompare(right.hostUrl),
-	);
+	const instances = [...config.instances].sort((left, right) => {
+		const labelComparison = getJenkinsInstanceDisplayName(left).localeCompare(
+			getJenkinsInstanceDisplayName(right),
+		);
+
+		if (labelComparison !== 0) {
+			return labelComparison;
+		}
+
+		return left.hostUrl.localeCompare(right.hostUrl);
+	});
 
 	return Promise.all(instances.map((instance) => buildSummary(instance)));
 }
@@ -997,6 +1056,9 @@ export async function saveJenkinsInstance(
 					...config.instances[existingIndex],
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
+					customName: normalized.customName,
+					iconLabel: normalized.iconLabel,
+					iconBackgroundColor: normalized.iconBackgroundColor,
 					disableSslVerification: normalized.disableSslVerification ?? false,
 					jobs: normalized.jobs ?? config.instances[existingIndex].jobs,
 					jobRetentionDays:
@@ -1020,6 +1082,9 @@ export async function saveJenkinsInstance(
 					id: normalized.id ?? createId(),
 					hostUrl: normalized.hostUrl,
 					username: normalized.username,
+					customName: normalized.customName,
+					iconLabel: normalized.iconLabel,
+					iconBackgroundColor: normalized.iconBackgroundColor,
 					disableSslVerification: normalized.disableSslVerification ?? false,
 					jobs: normalized.jobs ?? [],
 					jobRetentionDays:

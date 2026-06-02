@@ -23,13 +23,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { JenkinsInstanceSummary } from "../../../shared/jenkins";
 import {
 	buildJenkinsJobPath,
 	buildJenkinsJobUrl,
+	getJenkinsInstanceButtonTitle,
+	getJenkinsInstanceDisplayName,
+	getJenkinsInstanceHostname,
+	getJenkinsInstanceIconColors,
+	getJenkinsInstanceIconLabel,
+	type JenkinsInstanceSummary,
 } from "../../../shared/jenkins";
 import type { InstanceDialogProps, JobDialogProps } from "./types";
-import { InfoTile } from "./ui";
+import { InfoTile, InstanceAvatarMark } from "./ui";
 
 export function DeleteInstanceDialog({
 	open,
@@ -151,6 +156,16 @@ export function InstanceDialog({
 	onTestConnection,
 	onSave,
 }: InstanceDialogProps) {
+	const previewColor = toPreviewIconBackgroundColor(
+		formState.iconBackgroundColor,
+	);
+	const previewInstance = {
+		customName: formState.customName.trim() || undefined,
+		hostUrl: formState.hostUrl.trim(),
+		iconLabel: formState.iconLabel || undefined,
+		iconBackgroundColor: previewColor,
+	};
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-[42rem]">
@@ -161,7 +176,8 @@ export function InstanceDialog({
 							: "Edit Jenkins instance"}
 					</DialogTitle>
 					<DialogDescription>
-						Manage only the Jenkins connection information here.
+						Manage connection settings and the sidebar identity shown for this
+						instance.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -195,6 +211,104 @@ export function InstanceDialog({
 								}
 								placeholder="automation-bot"
 							/>
+						</div>
+					</div>
+
+					<div className="grid gap-4 md:grid-cols-2">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="customName">Custom name</Label>
+							<Input
+								id="customName"
+								value={formState.customName}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										customName: event.target.value,
+									}))
+								}
+								placeholder="Production Jenkins"
+							/>
+							<p className="text-xs text-muted-foreground">
+								Optional display name used in the sidebar and dialogs.
+							</p>
+						</div>
+
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="iconLabel">Icon label</Label>
+							<Input
+								id="iconLabel"
+								value={formState.iconLabel}
+								onChange={(event) =>
+									onFormStateChange((current) => ({
+										...current,
+										iconLabel: event.target.value,
+									}))
+								}
+								maxLength={3}
+								placeholder="PRD"
+							/>
+							<p className="text-xs text-muted-foreground">
+								Optional 1-3 character label shown inside the instance icon.
+							</p>
+						</div>
+					</div>
+
+					<div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_14rem]">
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="iconBackgroundColor">Icon background color</Label>
+							<div className="flex gap-2">
+								<Input
+									id="iconBackgroundColor"
+									value={formState.iconBackgroundColor}
+									onChange={(event) =>
+										onFormStateChange((current) => ({
+											...current,
+											iconBackgroundColor: event.target.value,
+										}))
+									}
+									placeholder="#111827"
+								/>
+								<input
+									type="color"
+									value={previewColor ?? "#111827"}
+									onChange={(event) =>
+										onFormStateChange((current) => ({
+											...current,
+											iconBackgroundColor: event.target.value,
+										}))
+									}
+									className="h-8 w-10 rounded-lg border border-input bg-transparent p-1"
+									aria-label="Pick icon background color"
+								/>
+							</div>
+							<p className="text-xs text-muted-foreground">
+								Optional hex color for the instance icon background.
+							</p>
+						</div>
+
+						<div className="rounded-xl border bg-muted/20 px-4 py-3">
+							<p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+								Preview
+							</p>
+							<div className="mt-3 flex items-center gap-3">
+								<InstanceAvatarMark
+									className="size-12 shrink-0"
+									label={getJenkinsInstanceIconLabel(previewInstance)}
+									colors={
+										getJenkinsInstanceIconColors(previewInstance) ?? undefined
+									}
+								/>
+								<div className="min-w-0">
+									<p className="truncate text-sm font-semibold text-foreground">
+										{getJenkinsInstanceDisplayName(previewInstance)}
+									</p>
+									<p className="truncate text-xs text-muted-foreground">
+										{getJenkinsInstanceHostname(
+											previewInstance.hostUrl || "Instance",
+										)}
+									</p>
+								</div>
+							</div>
 						</div>
 					</div>
 
@@ -336,6 +450,24 @@ export function InstanceDialog({
 	);
 }
 
+function toPreviewIconBackgroundColor(value: string): string | undefined {
+	const trimmed = value.trim();
+
+	if (!trimmed) {
+		return undefined;
+	}
+
+	if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+		const [, red, green, blue] = trimmed;
+		return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
+	}
+
+	if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+		return trimmed.toLowerCase();
+	}
+
+	return undefined;
+}
 export function JobDialog({
 	open,
 	onOpenChange,
@@ -523,9 +655,5 @@ export function JobDialog({
 }
 
 function getInstanceTitle(instance: JenkinsInstanceSummary): string {
-	try {
-		return new URL(instance.hostUrl).hostname;
-	} catch {
-		return instance.hostUrl;
-	}
+	return getJenkinsInstanceButtonTitle(instance);
 }

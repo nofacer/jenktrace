@@ -1,9 +1,14 @@
 export type JenkinsInstanceId = string;
 
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
 export type JenkinsInstanceRecord = {
 	id: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
+	customName?: string;
+	iconLabel?: string;
+	iconBackgroundColor?: string;
 	disableSslVerification: boolean;
 	jobs: string[];
 	jobRetentionDays: Record<string, number>;
@@ -166,6 +171,9 @@ export type UpsertJenkinsInstanceInput = {
 	id?: JenkinsInstanceId;
 	hostUrl: string;
 	username: string;
+	customName?: string;
+	iconLabel?: string;
+	iconBackgroundColor?: string;
 	disableSslVerification?: boolean;
 	jobs?: string[];
 	jobRetentionDays?: Record<string, number>;
@@ -209,6 +217,84 @@ export function buildJenkinsJobUrl(
 	fullProjectName: string,
 ): string {
 	return `${normalizeHostUrl(hostUrl)}${buildJenkinsJobPath(fullProjectName)}`;
+}
+
+export function getJenkinsInstanceHostname(hostUrl: string): string {
+	try {
+		return new URL(hostUrl).hostname;
+	} catch {
+		return hostUrl;
+	}
+}
+
+export function getJenkinsInstanceDisplayName(
+	instance: Pick<JenkinsInstanceRecord, "customName" | "hostUrl">,
+): string {
+	return instance.customName ?? getJenkinsInstanceHostname(instance.hostUrl);
+}
+
+export function getJenkinsInstanceButtonTitle(
+	instance: Pick<JenkinsInstanceRecord, "customName" | "hostUrl">,
+): string {
+	const hostname = getJenkinsInstanceHostname(instance.hostUrl);
+
+	return instance.customName
+		? `${instance.customName} (${hostname})`
+		: hostname;
+}
+
+export function getJenkinsInstanceIconLabel(
+	instance: Pick<JenkinsInstanceRecord, "customName" | "hostUrl" | "iconLabel">,
+): string {
+	const explicitLabel = normalizeIconLabel(instance.iconLabel);
+
+	if (explicitLabel) {
+		return explicitLabel;
+	}
+
+	const source = getJenkinsInstanceDisplayName(instance);
+
+	if (!source) {
+		return "IN";
+	}
+
+	const parts = source.match(/[a-zA-Z0-9]+/g);
+
+	if (!parts || parts.length === 0) {
+		return source.slice(0, 2).toUpperCase();
+	}
+
+	if (parts.length === 1) {
+		return parts[0].slice(0, 2).toUpperCase();
+	}
+
+	return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+export function getJenkinsInstanceIconColors(
+	instance: Pick<JenkinsInstanceRecord, "iconBackgroundColor">,
+): { backgroundColor: string; foregroundColor: string } | null {
+	if (!instance.iconBackgroundColor) {
+		return null;
+	}
+
+	const hex = instance.iconBackgroundColor.slice(1);
+	const normalizedHex =
+		hex.length === 3
+			? hex
+					.split("")
+					.map((part) => `${part}${part}`)
+					.join("")
+			: hex;
+	const red = Number.parseInt(normalizedHex.slice(0, 2), 16);
+	const green = Number.parseInt(normalizedHex.slice(2, 4), 16);
+	const blue = Number.parseInt(normalizedHex.slice(4, 6), 16);
+	const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+
+	return {
+		backgroundColor: instance.iconBackgroundColor,
+		foregroundColor: brightness >= 160 ? "#111827" : "#ffffff",
+	};
 }
 
 export function validateConnectionTestInput(
@@ -293,6 +379,11 @@ export function validateInstanceInput(
 ): UpsertJenkinsInstanceInput {
 	const hostUrl = normalizeHostUrl(input.hostUrl);
 	const username = input.username.trim();
+	const customName = normalizeOptionalText(input.customName);
+	const iconLabel = normalizeIconLabel(input.iconLabel);
+	const iconBackgroundColor = normalizeIconBackgroundColor(
+		input.iconBackgroundColor,
+	);
 	const disableSslVerification = input.disableSslVerification ?? false;
 	const jobs = input.jobs ? normalizeJobNames(input.jobs) : undefined;
 	const jobRetentionDays = normalizeJobRetentionDays(
@@ -321,6 +412,9 @@ export function validateInstanceInput(
 		...input,
 		hostUrl,
 		username,
+		customName,
+		iconLabel,
+		iconBackgroundColor,
 		disableSslVerification,
 		jobs,
 		jobRetentionDays,
@@ -332,6 +426,37 @@ export function validateInstanceInput(
 	};
 }
 
+function normalizeOptionalText(value?: string): string | undefined {
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : undefined;
+}
+
+function normalizeIconLabel(value?: string): string | undefined {
+	const collapsed = value
+		?.match(/[a-zA-Z0-9]+/g)
+		?.join("")
+		.toUpperCase();
+	return collapsed ? collapsed.slice(0, 3) : undefined;
+}
+
+function normalizeIconBackgroundColor(value?: string): string | undefined {
+	const trimmed = normalizeOptionalText(value);
+
+	if (!trimmed) {
+		return undefined;
+	}
+
+	if (!HEX_COLOR_PATTERN.test(trimmed)) {
+		throw new Error("Icon background color must be a valid hex color.");
+	}
+
+	if (trimmed.length === 4) {
+		const [, red, green, blue] = trimmed;
+		return `#${red}${red}${green}${green}${blue}${blue}`.toLowerCase();
+	}
+
+	return trimmed.toLowerCase();
+}
 export function normalizePollIntervalMinutes(value?: number): number {
 	if (value == null || Number.isNaN(value)) {
 		return 5;

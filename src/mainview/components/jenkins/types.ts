@@ -7,6 +7,9 @@ export type InstanceFormState = {
 	id?: string;
 	hostUrl: string;
 	username: string;
+	customName: string;
+	iconLabel: string;
+	iconBackgroundColor: string;
 	apiKey: string;
 	disableSslVerification: boolean;
 	monitoringEnabled: boolean;
@@ -28,6 +31,9 @@ export type JobDialogMode = "create" | "edit";
 export const EMPTY_FORM: InstanceFormState = {
 	hostUrl: "",
 	username: "",
+	customName: "",
+	iconLabel: "",
+	iconBackgroundColor: "",
 	apiKey: "",
 	disableSslVerification: false,
 	monitoringEnabled: true,
@@ -53,6 +59,9 @@ export function buildFormState(
 		id: instance.id,
 		hostUrl: instance.hostUrl,
 		username: instance.username,
+		customName: instance.customName ?? "",
+		iconLabel: instance.iconLabel ?? "",
+		iconBackgroundColor: instance.iconBackgroundColor ?? "",
 		apiKey: "",
 		disableSslVerification: instance.disableSslVerification,
 		monitoringEnabled: instance.monitoringEnabled,

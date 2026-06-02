@@ -1,6 +1,5 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,9 +14,16 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { JenkinsInstanceSummary } from "../../../shared/jenkins";
-import { buildJenkinsJobPath } from "../../../shared/jenkins";
-import { EmptyStateCard } from "./ui";
+import {
+	buildJenkinsJobPath,
+	getJenkinsInstanceButtonTitle,
+	getJenkinsInstanceDisplayName,
+	getJenkinsInstanceHostname,
+	getJenkinsInstanceIconColors,
+	getJenkinsInstanceIconLabel,
+	type JenkinsInstanceSummary,
+} from "../../../shared/jenkins";
+import { EmptyStateCard, InstanceAvatarMark } from "./ui";
 
 export function InstanceSidebar({
 	instances,
@@ -68,23 +74,24 @@ export function InstanceSidebar({
 								type="button"
 								key={instance.id}
 								size="icon-lg"
-								variant={isActive ? "default" : "outline"}
-								title={getInstanceTitle(instance)}
+								variant="outline"
+								title={getJenkinsInstanceButtonTitle(instance)}
 								onClick={() => onSelectInstance(instance.id)}
-								className="size-12 rounded-xl p-0"
+								className={cn(
+									"size-12 rounded-xl border-border/70 p-0",
+									isActive && "border-primary bg-primary/10 shadow-sm",
+								)}
 							>
-								<Avatar className="size-10" size="lg">
-									<AvatarFallback
-										className={cn(
-											"text-xs font-semibold",
-											isActive
-												? "bg-primary text-primary-foreground"
-												: "bg-background text-foreground",
-										)}
-									>
-										{summarizeInstance(instance)}
-									</AvatarFallback>
-								</Avatar>
+								<InstanceAvatarMark
+									className="size-10"
+									label={getJenkinsInstanceIconLabel(instance)}
+									colors={getJenkinsInstanceIconColors(instance) ?? undefined}
+									labelClassName={
+										isActive && !instance.iconBackgroundColor
+											? "bg-primary text-primary-foreground"
+											: undefined
+									}
+								/>
 							</Button>
 						);
 					})}
@@ -96,12 +103,27 @@ export function InstanceSidebar({
 					{selectedInstance ? (
 						<Card className="bg-muted/30">
 							<CardHeader>
-								<CardTitle className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-									Instance
-								</CardTitle>
-								<CardDescription className="truncate text-sm font-semibold text-foreground">
-									{getInstanceTitle(selectedInstance)}
-								</CardDescription>
+								<div className="flex items-start gap-3">
+									<InstanceAvatarMark
+										className="size-12 shrink-0"
+										label={getJenkinsInstanceIconLabel(selectedInstance)}
+										colors={
+											getJenkinsInstanceIconColors(selectedInstance) ??
+											undefined
+										}
+									/>
+									<div className="min-w-0 flex-1">
+										<CardTitle className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+											Instance
+										</CardTitle>
+										<CardDescription className="truncate text-sm font-semibold text-foreground">
+											{getJenkinsInstanceDisplayName(selectedInstance)}
+										</CardDescription>
+										<p className="truncate pt-1 text-xs text-muted-foreground">
+											{getJenkinsInstanceHostname(selectedInstance.hostUrl)}
+										</p>
+									</div>
+								</div>
 								<CardAction>
 									<Badge variant="outline">
 										{selectedInstance.jobs.length} jobs
@@ -232,22 +254,6 @@ export function InstanceSidebar({
 			</div>
 		</section>
 	);
-}
-
-function summarizeInstance(instance: JenkinsInstanceSummary): string {
-	try {
-		return new URL(instance.hostUrl).hostname.slice(0, 2).toUpperCase();
-	} catch {
-		return instance.hostUrl.slice(0, 2).toUpperCase();
-	}
-}
-
-function getInstanceTitle(instance: JenkinsInstanceSummary): string {
-	try {
-		return new URL(instance.hostUrl).hostname;
-	} catch {
-		return instance.hostUrl;
-	}
 }
 
 function formatPrefetchStatuses(
