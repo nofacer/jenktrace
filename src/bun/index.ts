@@ -10,6 +10,7 @@ import type {
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
 import type { AppRPCSchema } from "../shared/rpc";
+import { listAppLogs, writeAppLog } from "./app-log-store";
 import { native, toCString } from "./electrobun-native";
 import {
 	deleteJenkinsInstance,
@@ -36,9 +37,24 @@ async function getMainViewUrl(): Promise<string> {
 	if (channel === "dev") {
 		try {
 			await fetch(DEV_SERVER_URL, { method: "HEAD" });
+			writeAppLog({
+				scope: "app",
+				level: "debug",
+				code: "hmr_server_detected",
+				message: "Using the Vite dev server for the main view.",
+				detail: DEV_SERVER_URL,
+			});
 			console.log(`HMR enabled: Using Vite dev server at ${DEV_SERVER_URL}`);
 			return DEV_SERVER_URL;
 		} catch {
+			writeAppLog({
+				scope: "app",
+				level: "warn",
+				code: "hmr_server_unavailable",
+				message:
+					"Vite dev server not running. Falling back to the bundled main view.",
+				detail: "Run 'bun run dev:hmr' for HMR support.",
+			});
 			console.log(
 				"Vite dev server not running. Run 'bun run dev:hmr' for HMR support.",
 			);
@@ -54,6 +70,7 @@ const appRpc = BrowserView.defineRPC<AppRPCSchema>({
 	handlers: {
 		requests: {
 			listJenkinsInstances: () => listJenkinsInstances(),
+			listAppLogs: () => listAppLogs(),
 			saveJenkinsInstance: (params: UpsertJenkinsInstanceInput) =>
 				saveJenkinsInstance(params),
 			deleteJenkinsInstance: ({ id }: { id: string }) =>
@@ -83,11 +100,26 @@ async function runMonitoringTick() {
 	try {
 		const result = await runJenkinsMonitoringCycle();
 		if (result.processedJobs > 0) {
+			writeAppLog({
+				scope: "monitoring",
+				level: result.observedChanges > 0 ? "info" : "debug",
+				code: "monitoring_tick_completed",
+				message: "Monitoring tick completed.",
+				detail: `Processed ${result.processedJobs} jobs. Observed ${result.observedChanges} changes.`,
+			});
 			console.log(
 				`Monitoring tick processed ${result.processedJobs} jobs and observed ${result.observedChanges} changes.`,
 			);
 		}
 	} catch (error) {
+		writeAppLog({
+			scope: "monitoring",
+			level: "error",
+			code: "monitoring_tick_failed",
+			message: "Monitoring tick failed.",
+			detail:
+				error instanceof Error ? error.message : "Unknown monitoring error.",
+		});
 		console.error("Monitoring tick failed:", error);
 	} finally {
 		monitoringRunInFlight = false;
@@ -140,6 +172,12 @@ if (existsSync(APP_ICON_PATH)) {
 	native?.symbols.setWindowIcon(mainWindow.ptr, toCString(APP_ICON_PATH));
 }
 
+writeAppLog({
+	scope: "app",
+	level: "info",
+	code: "app_started",
+	message: "Jenktrace app started.",
+});
 console.log("jenktrace app started!");
 void runMonitoringTick();
 setInterval(() => {

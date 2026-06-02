@@ -28,9 +28,10 @@ Release notes live in [docs/release-notes](/Users/dustni/workspace/jenktrace/doc
 
 Current published notes:
 
-- [v1.0.0](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.0.md)
-- [v1.0.1](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.1.md)
-- [v1.0.2](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.2.md)
-- [v1.0.3](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.3.md)
+- [v1.0.6](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.6.md)
 - [v1.0.5](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.5.md)
 - [v1.0.4](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.4.md)
+- [v1.0.3](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.3.md)
+- [v1.0.2](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.2.md)
+- [v1.0.1](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.1.md)
+- [v1.0.0](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.0.md)

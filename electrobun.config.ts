@@ -4,7 +4,7 @@ export default {
 	app: {
 		name: "jenktrace",
 		identifier: "dev.electrobun.jenktrace",
-		version: "1.0.5",
+		version: "1.0.6",
 	},
 	build: {
 		// Vite builds to dist/, we copy from there
