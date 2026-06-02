@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { InstanceFormState, JobFormState } from "@/components/jenkins";
 import {
@@ -25,6 +25,8 @@ import type {
 	UpsertJenkinsInstanceInput,
 } from "../shared/jenkins";
 import { normalizeFullProjectName } from "../shared/jenkins";
+
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
 
 export default function App() {
 	const [instances, setInstances] = useState<JenkinsInstanceSummary[]>([]);
@@ -84,6 +86,93 @@ export default function App() {
 		[instances, selectedInstanceId],
 	);
 
+	const loadSelectedJobDetails = useCallback(async () => {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
+
+		const requestId = ++jobDetailsRequestIdRef.current;
+
+		setIsLoadingJobDetails(true);
+		setJobDetailsError(null);
+		setJobActivityError(null);
+
+		try {
+			const [nextDetails, nextActivity] = await Promise.all([
+				appRpc.proxy.request.getJenkinsJobDetails({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+				}),
+				appRpc.proxy.request.getJenkinsJobActivity({
+					instanceId: selectedInstance.id,
+					fullProjectName: selectedJob,
+				}),
+			]);
+
+			if (requestId === jobDetailsRequestIdRef.current) {
+				setJobDetails(nextDetails);
+				setJobActivity(nextActivity);
+			}
+		} catch (error) {
+			if (requestId === jobDetailsRequestIdRef.current) {
+				setJobDetails(null);
+				setJobActivity(null);
+				setJobDetailsError(
+					error instanceof Error
+						? error.message
+						: "Failed to load Jenkins job details.",
+				);
+				setJobActivityError(
+					error instanceof Error ? error.message : "Failed to load activity.",
+				);
+			}
+		} finally {
+			if (requestId === jobDetailsRequestIdRef.current) {
+				setIsLoadingJobDetails(false);
+			}
+		}
+	}, [selectedInstance, selectedJob]);
+
+	const loadSelectedJobAnalytics = useCallback(async () => {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
+
+		const requestId = ++jobAnalyticsRequestIdRef.current;
+
+		setIsLoadingJobAnalytics(true);
+		setJobAnalyticsError(null);
+
+		try {
+			const nextAnalytics = await appRpc.proxy.request.getJenkinsJobAnalytics({
+				instanceId: selectedInstance.id,
+				fullProjectName: selectedJob,
+				range: selectedTimeRange,
+			});
+
+			if (requestId === jobAnalyticsRequestIdRef.current) {
+				setJobAnalytics(nextAnalytics);
+			}
+		} catch (error) {
+			if (requestId === jobAnalyticsRequestIdRef.current) {
+				setJobAnalytics(null);
+				setJobAnalyticsError(
+					error instanceof Error
+						? error.message
+						: "Failed to load build analytics.",
+				);
+			}
+		} finally {
+			if (requestId === jobAnalyticsRequestIdRef.current) {
+				setIsLoadingJobAnalytics(false);
+			}
+		}
+	}, [selectedInstance, selectedJob, selectedTimeRange]);
+
+	const refreshSelectedJob = useCallback(async () => {
+		await Promise.all([loadSelectedJobDetails(), loadSelectedJobAnalytics()]);
+	}, [loadSelectedJobAnalytics, loadSelectedJobDetails]);
+
 	useEffect(() => {
 		const run = async () => {
 			setIsLoading(true);
@@ -128,51 +217,8 @@ export default function App() {
 			return;
 		}
 
-		const requestId = ++jobDetailsRequestIdRef.current;
-
-		const run = async () => {
-			setIsLoadingJobDetails(true);
-			setJobDetailsError(null);
-			setJobActivityError(null);
-
-			try {
-				const [nextDetails, nextActivity] = await Promise.all([
-					appRpc.proxy.request.getJenkinsJobDetails({
-						instanceId: selectedInstance.id,
-						fullProjectName: selectedJob,
-					}),
-					appRpc.proxy.request.getJenkinsJobActivity({
-						instanceId: selectedInstance.id,
-						fullProjectName: selectedJob,
-					}),
-				]);
-
-				if (requestId === jobDetailsRequestIdRef.current) {
-					setJobDetails(nextDetails);
-					setJobActivity(nextActivity);
-				}
-			} catch (error) {
-				if (requestId === jobDetailsRequestIdRef.current) {
-					setJobDetails(null);
-					setJobActivity(null);
-					setJobDetailsError(
-						error instanceof Error
-							? error.message
-							: "Failed to load Jenkins job details.",
-					);
-					setJobActivityError(
-						error instanceof Error ? error.message : "Failed to load activity.",
-					);
-				}
-			} finally {
-				if (requestId === jobDetailsRequestIdRef.current) {
-					setIsLoadingJobDetails(false);
-				}
-			}
-		};
-
-		void run();
-	}, [selectedInstance, selectedJob]);
+		void loadSelectedJobDetails();
+	}, [loadSelectedJobDetails, selectedInstance, selectedJob]);
 
 	useEffect(() => {
 		if (!selectedInstance || !selectedJob) {
@@ -182,42 +228,34 @@ export default function App() {
 			return;
 		}
 
-		const requestId = ++jobAnalyticsRequestIdRef.current;
+		void loadSelectedJobAnalytics();
+	}, [loadSelectedJobAnalytics, selectedInstance, selectedJob]);
 
-		const run = async () => {
-			setIsLoadingJobAnalytics(true);
-			setJobAnalyticsError(null);
+	useEffect(() => {
+		if (!selectedInstance || !selectedJob) {
+			return;
+		}
 
-			try {
-				const nextAnalytics = await appRpc.proxy.request.getJenkinsJobAnalytics(
-					{
-						instanceId: selectedInstance.id,
-						fullProjectName: selectedJob,
-						range: selectedTimeRange,
-					},
-				);
-
-				if (requestId === jobAnalyticsRequestIdRef.current) {
-					setJobAnalytics(nextAnalytics);
-				}
-			} catch (error) {
-				if (requestId === jobAnalyticsRequestIdRef.current) {
-					setJobAnalytics(null);
-					setJobAnalyticsError(
-						error instanceof Error
-							? error.message
-							: "Failed to load build analytics.",
-					);
-				}
-			} finally {
-				if (requestId === jobAnalyticsRequestIdRef.current) {
-					setIsLoadingJobAnalytics(false);
-				}
+		const intervalId = window.setInterval(() => {
+			if (document.visibilityState !== "visible") {
+				return;
 			}
-		};
 
-		void run();
-	}, [selectedInstance, selectedJob, selectedTimeRange]);
+			if (isLoadingJobDetails || isLoadingJobAnalytics) {
+				return;
+			}
+
+			void refreshSelectedJob();
+		}, AUTO_REFRESH_INTERVAL_MS);
+
+		return () => window.clearInterval(intervalId);
+	}, [
+		isLoadingJobAnalytics,
+		isLoadingJobDetails,
+		refreshSelectedJob,
+		selectedInstance,
+		selectedJob,
+	]);
 
 	function openCreateDialog() {
 		setInstanceDialogMode("create");
@@ -460,91 +498,6 @@ export default function App() {
 			);
 		} finally {
 			setIsSavingJob(false);
-		}
-	}
-
-	async function refreshSelectedJob() {
-		if (!selectedInstance || !selectedJob) {
-			return;
-		}
-
-		const requestId = ++jobDetailsRequestIdRef.current;
-
-		setIsLoadingJobDetails(true);
-		setJobDetailsError(null);
-		setJobActivityError(null);
-
-		try {
-			const [nextDetails, nextActivity] = await Promise.all([
-				appRpc.proxy.request.getJenkinsJobDetails({
-					instanceId: selectedInstance.id,
-					fullProjectName: selectedJob,
-				}),
-				appRpc.proxy.request.getJenkinsJobActivity({
-					instanceId: selectedInstance.id,
-					fullProjectName: selectedJob,
-				}),
-			]);
-
-			if (requestId === jobDetailsRequestIdRef.current) {
-				setJobDetails(nextDetails);
-				setJobActivity(nextActivity);
-			}
-		} catch (error) {
-			if (requestId === jobDetailsRequestIdRef.current) {
-				setJobDetails(null);
-				setJobActivity(null);
-				setJobDetailsError(
-					error instanceof Error
-						? error.message
-						: "Failed to load Jenkins job details.",
-				);
-				setJobActivityError(
-					error instanceof Error ? error.message : "Failed to load activity.",
-				);
-			}
-		} finally {
-			if (requestId === jobDetailsRequestIdRef.current) {
-				setIsLoadingJobDetails(false);
-			}
-		}
-
-		void refreshSelectedJobAnalytics();
-	}
-
-	async function refreshSelectedJobAnalytics() {
-		if (!selectedInstance || !selectedJob) {
-			return;
-		}
-
-		const requestId = ++jobAnalyticsRequestIdRef.current;
-
-		setIsLoadingJobAnalytics(true);
-		setJobAnalyticsError(null);
-
-		try {
-			const nextAnalytics = await appRpc.proxy.request.getJenkinsJobAnalytics({
-				instanceId: selectedInstance.id,
-				fullProjectName: selectedJob,
-				range: selectedTimeRange,
-			});
-
-			if (requestId === jobAnalyticsRequestIdRef.current) {
-				setJobAnalytics(nextAnalytics);
-			}
-		} catch (error) {
-			if (requestId === jobAnalyticsRequestIdRef.current) {
-				setJobAnalytics(null);
-				setJobAnalyticsError(
-					error instanceof Error
-						? error.message
-						: "Failed to load build analytics.",
-				);
-			}
-		} finally {
-			if (requestId === jobAnalyticsRequestIdRef.current) {
-				setIsLoadingJobAnalytics(false);
-			}
 		}
 	}
 
