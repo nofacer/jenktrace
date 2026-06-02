@@ -15,6 +15,7 @@ import {
 } from "@/components/jenkins";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { appRpc } from "@/lib/app-rpc";
+import type { AppLogEntry } from "../shared/app-log";
 import type {
 	JenkinsBuildTimeRange,
 	JenkinsConnectionTestResult,
@@ -27,6 +28,7 @@ import type {
 import { normalizeFullProjectName } from "../shared/jenkins";
 
 const AUTO_REFRESH_INTERVAL_MS = 60_000;
+const APP_LOG_REFRESH_INTERVAL_MS = 5_000;
 
 export default function App() {
 	const [instances, setInstances] = useState<JenkinsInstanceSummary[]>([]);
@@ -77,6 +79,9 @@ export default function App() {
 	);
 	const [selectedTimeRange, setSelectedTimeRange] =
 		useState<JenkinsBuildTimeRange>("last7d");
+	const [appLogs, setAppLogs] = useState<AppLogEntry[]>([]);
+	const [isLoadingAppLogs, setIsLoadingAppLogs] = useState(false);
+	const [appLogsError, setAppLogsError] = useState<string | null>(null);
 	const jobDetailsRequestIdRef = useRef(0);
 	const jobAnalyticsRequestIdRef = useRef(0);
 
@@ -85,6 +90,21 @@ export default function App() {
 			instances.find((instance) => instance.id === selectedInstanceId) ?? null,
 		[instances, selectedInstanceId],
 	);
+	const loadAppLogs = useCallback(async () => {
+		setIsLoadingAppLogs(true);
+		setAppLogsError(null);
+
+		try {
+			const nextLogs = await appRpc.proxy.request.listAppLogs();
+			setAppLogs(nextLogs);
+		} catch (error) {
+			setAppLogsError(
+				error instanceof Error ? error.message : "Failed to load app logs.",
+			);
+		} finally {
+			setIsLoadingAppLogs(false);
+		}
+	}, []);
 
 	const loadSelectedJobDetails = useCallback(async () => {
 		if (!selectedInstance || !selectedJob) {
@@ -179,7 +199,10 @@ export default function App() {
 			setErrorMessage(null);
 
 			try {
-				const nextInstances = await appRpc.proxy.request.listJenkinsInstances();
+				const [nextInstances] = await Promise.all([
+					appRpc.proxy.request.listJenkinsInstances(),
+					loadAppLogs(),
+				]);
 				setInstances(nextInstances);
 				setSelectedInstanceId(nextInstances[0]?.id ?? null);
 			} catch (error) {
@@ -192,7 +215,7 @@ export default function App() {
 		};
 
 		void run();
-	}, []);
+	}, [loadAppLogs]);
 
 	useEffect(() => {
 		if (!selectedInstance) {
@@ -256,6 +279,18 @@ export default function App() {
 		selectedInstance,
 		selectedJob,
 	]);
+
+	useEffect(() => {
+		const intervalId = window.setInterval(() => {
+			if (document.visibilityState !== "visible") {
+				return;
+			}
+
+			void loadAppLogs();
+		}, APP_LOG_REFRESH_INTERVAL_MS);
+
+		return () => window.clearInterval(intervalId);
+	}, [loadAppLogs]);
 
 	function openCreateDialog() {
 		setInstanceDialogMode("create");
@@ -363,6 +398,7 @@ export default function App() {
 				error instanceof Error ? error.message : "Failed to save instance.",
 			);
 		} finally {
+			await loadAppLogs();
 			setIsSaving(false);
 		}
 	}
@@ -388,6 +424,7 @@ export default function App() {
 				error instanceof Error ? error.message : "Failed to delete instance.",
 			);
 		} finally {
+			await loadAppLogs();
 			setIsDeleting(false);
 		}
 	}
@@ -411,6 +448,7 @@ export default function App() {
 				error instanceof Error ? error.message : "Failed to test connection.",
 			);
 		} finally {
+			await loadAppLogs();
 			setIsTesting(false);
 		}
 	}
@@ -503,6 +541,7 @@ export default function App() {
 				error instanceof Error ? error.message : "Failed to save job.",
 			);
 		} finally {
+			await loadAppLogs();
 			setIsSavingJob(false);
 		}
 	}
@@ -558,6 +597,7 @@ export default function App() {
 				error instanceof Error ? error.message : "Failed to delete job.",
 			);
 		} finally {
+			await loadAppLogs();
 			setIsDeletingJob(false);
 		}
 	}
@@ -588,6 +628,9 @@ export default function App() {
 					jobAnalytics={jobAnalytics}
 					jobDetailsError={jobDetailsError}
 					jobActivityError={jobActivityError}
+					appLogs={appLogs}
+					appLogsError={appLogsError}
+					isLoadingAppLogs={isLoadingAppLogs}
 					jobAnalyticsError={jobAnalyticsError}
 					selectedTimeRange={selectedTimeRange}
 					isLoadingJobDetails={isLoadingJobDetails}
@@ -597,6 +640,7 @@ export default function App() {
 					onRefreshJob={refreshSelectedJob}
 					onEditJob={openEditJobDialog}
 					onDeleteJob={openDeleteJobDialog}
+					onRefreshAppLogs={loadAppLogs}
 				/>
 
 				<DeleteInstanceDialog

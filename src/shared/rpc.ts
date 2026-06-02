@@ -1,3 +1,4 @@
+import type { AppLogEntry } from "./app-log";
 import type {
 	JenkinsBuildLogInput,
 	JenkinsBuildLogRecord,
@@ -21,6 +22,10 @@ export type AppRPCSchema = {
 			listJenkinsInstances: {
 				params: undefined;
 				response: JenkinsInstanceSummary[];
+			};
+			listAppLogs: {
+				params: undefined;
+				response: AppLogEntry[];
 			};
 			saveJenkinsInstance: {
 				params: UpsertJenkinsInstanceInput;

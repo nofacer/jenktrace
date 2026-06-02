@@ -39,6 +39,7 @@ import {
 	validateJobAnalyticsInput,
 	validateJobDetailsInput,
 } from "../shared/jenkins";
+import { fetchWithAppLog, writeAppLog } from "./app-log-store";
 import { getAppUserDataDir } from "./runtime-paths";
 
 const CONFIG_DIR = join(getAppUserDataDir(), "config");
@@ -893,12 +894,26 @@ function summarizeInstanceChanges(
 
 	for (const job of previousJobs) {
 		if (!nextSet.has(job)) {
+			writeAppLog({
+				scope: "job",
+				level: "info",
+				code: "job_removed",
+				message: `Removed monitored job "${job}".`,
+				detail: `Instance ${instanceId}.`,
+			});
 			deleteJobRuntimeData(instanceId, job);
 		}
 	}
 
 	for (const job of nextJobs) {
 		if (!previousSet.has(job)) {
+			writeAppLog({
+				scope: "job",
+				level: "info",
+				code: "job_added",
+				message: `Added monitored job "${job}".`,
+				detail: `Instance ${instanceId}.`,
+			});
 			writeLog({
 				instanceId,
 				fullProjectName: job,
@@ -969,9 +984,12 @@ async function fetchJsonWithAuth(
 	url: string,
 	username: string,
 	apiKey: string,
+	code: string,
 	disableSslVerification = false,
 ): Promise<Response> {
-	return fetch(url, {
+	return fetchWithAppLog({
+		url,
+		code,
 		headers: {
 			Accept: "application/json",
 			Authorization: buildAuthorizationHeader(username, apiKey),
@@ -1154,6 +1172,16 @@ export async function saveJenkinsInstance(
 	if (normalized.apiKey) {
 		await saveApiKey(record.id, normalized.apiKey);
 	}
+	writeAppLog({
+		scope: "instance",
+		level: "info",
+		code: existingIndex >= 0 ? "instance_updated" : "instance_created",
+		message:
+			existingIndex >= 0
+				? `Updated Jenkins instance "${getJenkinsInstanceDisplayName(record)}".`
+				: `Created Jenkins instance "${getJenkinsInstanceDisplayName(record)}".`,
+		detail: record.hostUrl,
+	});
 
 	return listJenkinsInstances();
 }
@@ -1162,6 +1190,9 @@ export async function deleteJenkinsInstance(
 	instanceId: string,
 ): Promise<JenkinsInstanceSummary[]> {
 	const config = await readConfig();
+	const deletedInstance = config.instances.find(
+		(instance) => instance.id === instanceId,
+	);
 	const nextInstances = config.instances.filter(
 		(instance) => instance.id !== instanceId,
 	);
@@ -1173,6 +1204,15 @@ export async function deleteJenkinsInstance(
 	await writeConfig({ instances: nextInstances });
 	deleteInstanceRuntimeData(instanceId);
 	await deleteApiKey(instanceId);
+	writeAppLog({
+		scope: "instance",
+		level: "info",
+		code: "instance_deleted",
+		message: deletedInstance
+			? `Deleted Jenkins instance "${getJenkinsInstanceDisplayName(deletedInstance)}".`
+			: "Deleted Jenkins instance.",
+		detail: deletedInstance?.hostUrl,
+	});
 
 	return listJenkinsInstances();
 }
@@ -1430,6 +1470,7 @@ async function resolveBuildSummary(
 		`${build.url}api/json`,
 		username,
 		apiKey,
+		"jenkins_build_summary_request",
 		disableSslVerification,
 	);
 
@@ -1463,7 +1504,9 @@ async function fetchBuildLogForInstance(params: {
 	let response: Response;
 
 	try {
-		response = await fetch(`${buildUrl}consoleText`, {
+		response = await fetchWithAppLog({
+			url: `${buildUrl}consoleText`,
+			code: "jenkins_build_log_request",
 			headers: {
 				Authorization: buildAuthorizationHeader(
 					params.instance.username,
@@ -1503,6 +1546,13 @@ async function fetchBuildLogForInstance(params: {
 		content,
 		updatedAt,
 	);
+	writeAppLog({
+		scope: "job",
+		level: "info",
+		code: "build_log_cached",
+		message: `Cached build log for "${params.fullProjectName}" #${params.buildNumber}.`,
+		detail: params.instance.hostUrl,
+	});
 
 	return {
 		instanceId: params.instance.id,
@@ -1548,6 +1598,7 @@ async function fetchJobDetailsForInstance(
 			jobApiUrl,
 			instance.username,
 			storedApiKey,
+			"jenkins_job_details_request",
 			instance.disableSslVerification,
 		);
 	} catch (error) {
@@ -1687,7 +1738,9 @@ export async function testJenkinsConnection(
 
 	let response: Response;
 	try {
-		response = await fetch(`${normalized.hostUrl}/api/json`, {
+		response = await fetchWithAppLog({
+			url: `${normalized.hostUrl}/api/json`,
+			code: "jenkins_connection_test_request",
 			headers: {
 				Accept: "application/json",
 				Authorization: buildAuthorizationHeader(normalized.username, apiKey),

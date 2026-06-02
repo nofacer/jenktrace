@@ -6,7 +6,7 @@ import {
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	Area,
 	AreaChart,
@@ -16,7 +16,6 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -45,6 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { appRpc } from "@/lib/app-rpc";
 import { cn } from "@/lib/utils";
+import type { AppLogEntry } from "../../../shared/app-log";
 import {
 	getJenkinsInstanceDisplayName,
 	type JenkinsBuildLogRecord,
@@ -63,6 +63,7 @@ const RANGE_OPTIONS: Array<{ label: string; value: JenkinsBuildTimeRange }> = [
 	{ label: "Last 7d", value: "last7d" },
 	{ label: "Last 1m", value: "last1m" },
 ];
+
 const ANALYTICS_SKELETON_KEYS = [
 	"total-builds",
 	"success-rate",
@@ -70,11 +71,18 @@ const ANALYTICS_SKELETON_KEYS = [
 	"failed-builds",
 	"avg-duration",
 ] as const;
+
 const BUILD_ROW_SKELETON_KEYS = [
 	"build-row-1",
 	"build-row-2",
 	"build-row-3",
 	"build-row-4",
+] as const;
+
+const APP_LOG_SKELETON_KEYS = [
+	"app-log-row-1",
+	"app-log-row-2",
+	"app-log-row-3",
 ] as const;
 
 const buildVolumeChartConfig = {
@@ -105,15 +113,19 @@ export function DetailsPanel({
 	jobDetails,
 	jobActivity: _jobActivity,
 	jobAnalytics,
+	appLogs,
 	jobDetailsError,
 	jobActivityError,
+	appLogsError,
 	jobAnalyticsError,
 	selectedTimeRange,
 	isLoadingJobDetails,
 	isLoadingJobAnalytics,
+	isLoadingAppLogs,
 	isDeletingJob,
 	onTimeRangeChange,
 	onRefreshJob,
+	onRefreshAppLogs,
 	onEditJob,
 	onDeleteJob,
 }: {
@@ -122,15 +134,19 @@ export function DetailsPanel({
 	jobDetails: JenkinsJobDetails | null;
 	jobActivity: JenkinsJobActivity | null;
 	jobAnalytics: JenkinsJobAnalytics | null;
+	appLogs: AppLogEntry[];
 	jobDetailsError: string | null;
 	jobActivityError: string | null;
+	appLogsError: string | null;
 	jobAnalyticsError: string | null;
 	selectedTimeRange: JenkinsBuildTimeRange;
 	isLoadingJobDetails: boolean;
 	isLoadingJobAnalytics: boolean;
+	isLoadingAppLogs: boolean;
 	isDeletingJob: boolean;
 	onTimeRangeChange: (range: JenkinsBuildTimeRange) => void;
 	onRefreshJob: () => void;
+	onRefreshAppLogs: () => void;
 	onEditJob: () => void;
 	onDeleteJob: () => void;
 }) {
@@ -139,6 +155,7 @@ export function DetailsPanel({
 	const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
 	const [isLoadingBuildLog, setIsLoadingBuildLog] = useState(false);
 	const [buildLogError, setBuildLogError] = useState<string | null>(null);
+	const appLogRows = useMemo(() => appLogs.slice(0, 50), [appLogs]);
 	const buildRows = jobAnalytics?.builds ?? [];
 	const bucketRows =
 		jobAnalytics?.buckets.map((bucket) => ({
@@ -188,7 +205,7 @@ export function DetailsPanel({
 								: "Job details")}
 					</h1>
 					<p className="text-sm text-muted-foreground">
-						Build analytics and recent build history.
+						Build analytics, recent build history, and app runtime logs.
 					</p>
 				</div>
 				{selectedJob ? (
@@ -225,6 +242,85 @@ export function DetailsPanel({
 
 			<div className="flex-1 overflow-y-auto p-6">
 				<div className="flex flex-col gap-6">
+					<Card>
+						<CardHeader className="gap-3">
+							<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+								<div>
+									<CardTitle>App logs</CardTitle>
+									<CardDescription>
+										Recent operational logs for app actions and HTTP requests.
+									</CardDescription>
+								</div>
+								<ActionIconButton
+									label={
+										isLoadingAppLogs
+											? "Refreshing app logs"
+											: "Refresh app logs"
+									}
+									onClick={onRefreshAppLogs}
+									disabled={isLoadingAppLogs}
+								>
+									<RefreshCw
+										className={cn(
+											isLoadingAppLogs ? "animate-spin" : undefined,
+										)}
+									/>
+								</ActionIconButton>
+							</div>
+						</CardHeader>
+						<CardContent className="flex flex-col gap-3">
+							{appLogsError ? (
+								<Alert variant="destructive">
+									<AlertTitle>Unable to load app logs</AlertTitle>
+									<AlertDescription>{appLogsError}</AlertDescription>
+								</Alert>
+							) : null}
+
+							{isLoadingAppLogs && !appLogRows.length ? (
+								APP_LOG_SKELETON_KEYS.map((key) => (
+									<Skeleton key={key} className="h-24 w-full rounded-xl" />
+								))
+							) : appLogRows.length ? (
+								appLogRows.map((log) => (
+									<div
+										key={log.id}
+										className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4"
+									>
+										<div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+											<div className="min-w-0">
+												<p className="break-words text-sm font-medium">
+													{log.message}
+												</p>
+												{log.detail ? (
+													<p className="mt-1 break-words font-mono text-xs text-muted-foreground">
+														{log.detail}
+													</p>
+												) : null}
+											</div>
+											<div className="flex flex-wrap items-center gap-2 xl:justify-end">
+												<Badge variant={getAppLogLevelBadgeVariant(log.level)}>
+													{log.level.toUpperCase()}
+												</Badge>
+												<Badge variant="outline">{log.scope}</Badge>
+												{log.repeatCount > 1 ? (
+													<Badge variant="secondary">×{log.repeatCount}</Badge>
+												) : null}
+											</div>
+										</div>
+										<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+											<span>{formatLogTimestamp(log.lastSeenAt)}</span>
+											<span className="font-mono">{log.code}</span>
+										</div>
+									</div>
+								))
+							) : (
+								<p className="text-sm text-muted-foreground">
+									No app logs recorded yet.
+								</p>
+							)}
+						</CardContent>
+					</Card>
+
 					{isLoadingJobDetails && !jobDetails ? (
 						<Card className="border-dashed bg-background/70">
 							<CardHeader>
@@ -610,4 +706,29 @@ function renderBuildIcon(build: JenkinsJobBuildRecord) {
 		default:
 			return <Wrench className="text-muted-foreground" />;
 	}
+}
+
+function getAppLogLevelBadgeVariant(
+	level: AppLogEntry["level"],
+): "default" | "secondary" | "outline" | "destructive" {
+	switch (level) {
+		case "error":
+			return "destructive";
+		case "warn":
+			return "secondary";
+		case "info":
+			return "default";
+		default:
+			return "outline";
+	}
+}
+
+function formatLogTimestamp(value: string): string {
+	const parsed = new Date(value);
+
+	if (Number.isNaN(parsed.getTime())) {
+		return value;
+	}
+
+	return parsed.toLocaleString();
 }
