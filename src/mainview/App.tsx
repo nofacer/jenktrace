@@ -135,8 +135,6 @@ export default function App() {
 			}
 		} catch (error) {
 			if (requestId === jobDetailsRequestIdRef.current) {
-				setJobDetails(null);
-				setJobActivity(null);
 				setJobDetailsError(
 					error instanceof Error
 						? error.message
@@ -175,7 +173,6 @@ export default function App() {
 			}
 		} catch (error) {
 			if (requestId === jobAnalyticsRequestIdRef.current) {
-				setJobAnalytics(null);
 				setJobAnalyticsError(
 					error instanceof Error
 						? error.message
