@@ -9,7 +9,7 @@ import {
 	TriangleAlert,
 	Wrench,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	Area,
 	AreaChart,
@@ -49,13 +49,17 @@ import { appRpc } from "@/lib/app-rpc";
 import { cn } from "@/lib/utils";
 import type { AppLogEntry } from "../../../shared/app-log";
 import {
+	filterJenkinsJobBuildsByStatus,
 	getJenkinsInstanceDisplayName,
+	getJenkinsJobBuildStatusFilter,
+	getJenkinsJobBuildStatusFilterOptions,
 	type JenkinsBuildLogRecord,
 	type JenkinsBuildTimeRange,
 	type JenkinsInstanceSummary,
 	type JenkinsJobActivity,
 	type JenkinsJobAnalytics,
 	type JenkinsJobBuildRecord,
+	type JenkinsJobBuildStatusFilter,
 	type JenkinsJobDetails,
 } from "../../../shared/jenkins";
 import { ActionIconButton, formatDuration, InfoTile } from "./ui";
@@ -159,8 +163,21 @@ export function DetailsPanel({
 	const [isLoadingBuildLog, setIsLoadingBuildLog] = useState(false);
 	const [buildLogError, setBuildLogError] = useState<string | null>(null);
 	const [isAppLogsOpen, setIsAppLogsOpen] = useState(false);
+	const [selectedBuildStatus, setSelectedBuildStatus] =
+		useState<JenkinsJobBuildStatusFilter>("all");
 	const appLogRows = useMemo(() => appLogs.slice(0, 50), [appLogs]);
 	const buildRows = jobAnalytics?.builds ?? [];
+	const buildStatusOptions = useMemo(
+		() => getJenkinsJobBuildStatusFilterOptions(buildRows),
+		[buildRows],
+	);
+	const visibleBuildRows = useMemo(
+		() =>
+			buildStatusOptions.includes(selectedBuildStatus)
+				? filterJenkinsJobBuildsByStatus(buildRows, selectedBuildStatus)
+				: buildRows,
+		[buildRows, buildStatusOptions, selectedBuildStatus],
+	);
 	const bucketRows =
 		jobAnalytics?.buckets.map((bucket) => ({
 			...bucket,
@@ -197,6 +214,15 @@ export function DetailsPanel({
 			setIsLoadingBuildLog(false);
 		}
 	}
+
+	useEffect(() => {
+		if (
+			selectedBuildStatus !== "all" &&
+			!buildStatusOptions.includes(selectedBuildStatus)
+		) {
+			setSelectedBuildStatus("all");
+		}
+	}, [buildStatusOptions, selectedBuildStatus]);
 
 	return (
 		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/10">
@@ -486,6 +512,34 @@ export function DetailsPanel({
 										</CardDescription>
 									</CardHeader>
 									<CardContent className="flex flex-col gap-3">
+										<div className="flex flex-col gap-3 rounded-xl border bg-background/70 p-4">
+											<div className="flex flex-col gap-1">
+												<h3 className="text-sm font-medium">Filter builds</h3>
+												<p className="text-sm text-muted-foreground">
+													Filter the build list below by status.
+												</p>
+											</div>
+											<ToggleGroup
+												value={[selectedBuildStatus]}
+												onValueChange={(value) => {
+													const nextValue = value[0];
+
+													if (nextValue) {
+														setSelectedBuildStatus(
+															nextValue as JenkinsJobBuildStatusFilter,
+														);
+													}
+												}}
+												variant="outline"
+												size="sm"
+											>
+												{buildStatusOptions.map((option) => (
+													<ToggleGroupItem key={option} value={option}>
+														{formatBuildStatusFilterLabel(option)}
+													</ToggleGroupItem>
+												))}
+											</ToggleGroup>
+										</div>
 										{isLoadingJobAnalytics ? (
 											BUILD_ROW_SKELETON_KEYS.map((key) => (
 												<Skeleton
@@ -493,8 +547,8 @@ export function DetailsPanel({
 													className="h-24 w-full rounded-xl"
 												/>
 											))
-										) : buildRows.length ? (
-											buildRows.map((build) => (
+										) : visibleBuildRows.length ? (
+											visibleBuildRows.map((build) => (
 												<div
 													key={build.id}
 													className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
@@ -535,7 +589,9 @@ export function DetailsPanel({
 											))
 										) : (
 											<p className="text-sm text-muted-foreground">
-												No builds found for the selected time range.
+												{selectedBuildStatus === "all"
+													? "No builds found for the selected time range."
+													: `No ${formatBuildStatusFilterLabel(selectedBuildStatus).toLowerCase()} builds found for the selected time range.`}
 											</p>
 										)}
 									</CardContent>
@@ -704,25 +760,31 @@ function formatPercent(value: number | null | undefined): string {
 	return `${Math.round(value * 100)}%`;
 }
 
-function getBuildStatusLabel(build: JenkinsJobBuildRecord): string {
-	if (build.building) {
-		return "Running";
-	}
-
-	switch (build.result) {
-		case "SUCCESS":
+function formatBuildStatusFilterLabel(
+	status: JenkinsJobBuildStatusFilter,
+): string {
+	switch (status) {
+		case "all":
+			return "All";
+		case "success":
 			return "Success";
-		case "FAILURE":
+		case "failure":
 			return "Failure";
-		case "ABORTED":
+		case "running":
+			return "Running";
+		case "aborted":
 			return "Aborted";
-		case "UNSTABLE":
+		case "unstable":
 			return "Unstable";
-		case "NOT_BUILT":
+		case "notBuilt":
 			return "Not built";
-		default:
-			return build.result ?? "Unknown";
+		case "unknown":
+			return "Unknown";
 	}
+}
+
+function getBuildStatusLabel(build: JenkinsJobBuildRecord): string {
+	return formatBuildStatusFilterLabel(getJenkinsJobBuildStatusFilter(build));
 }
 
 function getBuildBadgeVariant(

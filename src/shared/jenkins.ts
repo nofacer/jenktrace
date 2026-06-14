@@ -71,6 +71,16 @@ export type JenkinsJobBuildRecord = JenkinsJobBuildSummary & {
 	resultCategory: "success" | "failed" | "running" | "other";
 };
 
+export type JenkinsJobBuildStatusFilter =
+	| "all"
+	| "success"
+	| "failure"
+	| "running"
+	| "aborted"
+	| "unstable"
+	| "notBuilt"
+	| "unknown";
+
 export type JenkinsJobBuildBucket = {
 	bucketStart: string;
 	label: string;
@@ -561,4 +571,63 @@ export function normalizeJobPrefetchBuildLogStatusList(
 	);
 
 	return normalized.length ? [...new Set(normalized)] : ["failure"];
+}
+
+export function getJenkinsJobBuildStatusFilter(
+	build: Pick<JenkinsJobBuildRecord, "building" | "result">,
+): JenkinsJobBuildStatusFilter {
+	if (build.building) {
+		return "running";
+	}
+
+	switch (build.result) {
+		case "SUCCESS":
+			return "success";
+		case "FAILURE":
+			return "failure";
+		case "ABORTED":
+			return "aborted";
+		case "UNSTABLE":
+			return "unstable";
+		case "NOT_BUILT":
+			return "notBuilt";
+		default:
+			return "unknown";
+	}
+}
+
+export function filterJenkinsJobBuildsByStatus(
+	builds: JenkinsJobBuildRecord[],
+	status: JenkinsJobBuildStatusFilter,
+): JenkinsJobBuildRecord[] {
+	if (status === "all") {
+		return builds;
+	}
+
+	return builds.filter(
+		(build) => getJenkinsJobBuildStatusFilter(build) === status,
+	);
+}
+
+export function getJenkinsJobBuildStatusFilterOptions(
+	builds: JenkinsJobBuildRecord[],
+): JenkinsJobBuildStatusFilter[] {
+	const options = new Set<JenkinsJobBuildStatusFilter>(["all"]);
+
+	for (const build of builds) {
+		options.add(getJenkinsJobBuildStatusFilter(build));
+	}
+
+	const orderedOptions: JenkinsJobBuildStatusFilter[] = [
+		"all",
+		"success",
+		"failure",
+		"running",
+		"aborted",
+		"unstable",
+		"notBuilt",
+		"unknown",
+	];
+
+	return orderedOptions.filter((option) => options.has(option));
 }
