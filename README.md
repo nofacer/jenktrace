@@ -28,6 +28,7 @@ Release notes live in [docs/release-notes](/Users/dustni/workspace/jenktrace/doc
 
 Current published notes:
 
+- [v1.0.9](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.9.md)
 - [v1.0.8](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.8.md)
 - [v1.0.7](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.7.md)
 - [v1.0.6](/Users/dustni/workspace/jenktrace/docs/release-notes/v1.0.6.md)

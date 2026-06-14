@@ -44,6 +44,14 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { appRpc } from "@/lib/app-rpc";
 import { cn } from "@/lib/utils";
@@ -544,49 +552,76 @@ export function DetailsPanel({
 											BUILD_ROW_SKELETON_KEYS.map((key) => (
 												<Skeleton
 													key={key}
-													className="h-24 w-full rounded-xl"
+													className="h-14 w-full rounded-xl"
 												/>
 											))
 										) : visibleBuildRows.length ? (
-											visibleBuildRows.map((build) => (
-												<div
-													key={build.id}
-													className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
-												>
-													<div className="flex min-w-0 items-start gap-3">
-														<div className="pt-0.5">
-															{renderBuildIcon(build)}
-														</div>
-														<div className="min-w-0">
-															<p className="truncate text-sm font-medium">
-																{build.displayName ?? `Build #${build.number}`}
-															</p>
-															<p className="mt-1 text-xs text-muted-foreground">
-																Started{" "}
-																{build.timestamp
-																	? new Date(build.timestamp).toLocaleString()
-																	: "Unknown"}
-															</p>
-														</div>
-													</div>
-													<div className="flex flex-wrap items-center gap-2">
-														<Badge variant={getBuildBadgeVariant(build)}>
-															{getBuildStatusLabel(build)}
-														</Badge>
-														<Badge variant="outline">#{build.number}</Badge>
-														<Badge variant="outline">
-															{formatDuration(build.duration)}
-														</Badge>
-														<Button
-															size="sm"
-															variant="outline"
-															onClick={() => void handleOpenBuildLog(build)}
-														>
-															View log
-														</Button>
-													</div>
-												</div>
-											))
+											<div className="overflow-hidden rounded-xl border bg-background">
+												<Table>
+													<TableHeader>
+														<TableRow>
+															<TableHead>Build</TableHead>
+															<TableHead>Status</TableHead>
+															<TableHead>Number</TableHead>
+															<TableHead>Duration</TableHead>
+															<TableHead className="w-[1%]">Actions</TableHead>
+														</TableRow>
+													</TableHeader>
+													<TableBody>
+														{visibleBuildRows.map((build) => (
+															<TableRow key={build.id}>
+																<TableCell className="min-w-0 py-3 align-top whitespace-normal">
+																	<div className="flex min-w-0 items-start gap-3">
+																		<div className="pt-0.5">
+																			{renderBuildIcon(build)}
+																		</div>
+																		<div className="min-w-0">
+																			<p className="truncate text-sm font-medium">
+																				{build.displayName ??
+																					`Build #${build.number}`}
+																			</p>
+																			<p className="mt-1 text-xs text-muted-foreground">
+																				Started{" "}
+																				{build.timestamp
+																					? new Date(
+																							build.timestamp,
+																						).toLocaleString()
+																					: "Unknown"}
+																			</p>
+																		</div>
+																	</div>
+																</TableCell>
+																<TableCell className="py-3 align-top">
+																	<Badge variant={getBuildBadgeVariant(build)}>
+																		{getBuildStatusLabel(build)}
+																	</Badge>
+																</TableCell>
+																<TableCell className="py-3 align-top">
+																	<Badge variant="outline">
+																		#{build.number}
+																	</Badge>
+																</TableCell>
+																<TableCell className="py-3 align-top">
+																	<Badge variant="outline">
+																		{formatDuration(build.duration)}
+																	</Badge>
+																</TableCell>
+																<TableCell className="py-3 text-right align-top">
+																	<Button
+																		size="sm"
+																		variant="outline"
+																		onClick={() =>
+																			void handleOpenBuildLog(build)
+																		}
+																	>
+																		View log
+																	</Button>
+																</TableCell>
+															</TableRow>
+														))}
+													</TableBody>
+												</Table>
+											</div>
 										) : (
 											<p className="text-sm text-muted-foreground">
 												{selectedBuildStatus === "all"
