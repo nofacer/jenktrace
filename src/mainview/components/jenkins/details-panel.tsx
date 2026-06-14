@@ -70,6 +70,7 @@ import {
 	type JenkinsJobBuildStatusFilter,
 	type JenkinsJobDetails,
 } from "../../../shared/jenkins";
+import { getDetailsPanelLoadState } from "./details-panel-state";
 import { ActionIconButton, formatDuration, InfoTile } from "./ui";
 
 const RANGE_OPTIONS: Array<{ label: string; value: JenkinsBuildTimeRange }> = [
@@ -174,6 +175,16 @@ export function DetailsPanel({
 	const [selectedBuildStatus, setSelectedBuildStatus] =
 		useState<JenkinsJobBuildStatusFilter>("all");
 	const appLogRows = useMemo(() => appLogs.slice(0, 50), [appLogs]);
+	const {
+		hasJobDetails,
+		shouldShowInitialJobDetailsSkeleton,
+		shouldShowInitialJobAnalyticsSkeleton,
+	} = getDetailsPanelLoadState({
+		jobDetails,
+		jobAnalytics,
+		isLoadingJobDetails,
+		isLoadingJobAnalytics,
+	});
 	const buildRows = jobAnalytics?.builds ?? [];
 	const buildStatusOptions = useMemo(
 		() => getJenkinsJobBuildStatusFilterOptions(buildRows),
@@ -281,7 +292,7 @@ export function DetailsPanel({
 			<div className="min-h-0 flex flex-1 flex-col">
 				<div className="flex-1 overflow-y-auto p-6">
 					<div className="flex flex-col gap-6">
-						{isLoadingJobDetails && !jobDetails ? (
+						{shouldShowInitialJobDetailsSkeleton ? (
 							<Card className="border-dashed bg-background/70">
 								<CardHeader>
 									<CardTitle>Loading build analytics</CardTitle>
@@ -318,7 +329,7 @@ export function DetailsPanel({
 							</Alert>
 						) : null}
 
-						{!isLoadingJobDetails && !jobDetailsError && jobDetails ? (
+						{hasJobDetails ? (
 							<>
 								<Card>
 									<CardHeader className="gap-3">
@@ -357,7 +368,7 @@ export function DetailsPanel({
 										</div>
 									</CardHeader>
 									<CardContent className="flex flex-col gap-6">
-										{isLoadingJobAnalytics ? (
+										{shouldShowInitialJobAnalyticsSkeleton ? (
 											<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
 												{ANALYTICS_SKELETON_KEYS.map((key) => (
 													<Skeleton
@@ -393,7 +404,7 @@ export function DetailsPanel({
 											</div>
 										)}
 
-										{isLoadingJobAnalytics ? (
+										{shouldShowInitialJobAnalyticsSkeleton ? (
 											<div className="grid gap-4 xl:grid-cols-2">
 												<Skeleton className="h-72 w-full rounded-xl" />
 												<Skeleton className="h-72 w-full rounded-xl" />
@@ -548,7 +559,7 @@ export function DetailsPanel({
 												))}
 											</ToggleGroup>
 										</div>
-										{isLoadingJobAnalytics ? (
+										{shouldShowInitialJobAnalyticsSkeleton ? (
 											BUILD_ROW_SKELETON_KEYS.map((key) => (
 												<Skeleton
 													key={key}
