@@ -1,7 +1,10 @@
 import {
 	CheckCircle2,
+	ChevronDown,
+	ChevronUp,
 	Pencil,
 	RefreshCw,
+	ScrollText,
 	Trash2,
 	TriangleAlert,
 	Wrench,
@@ -155,6 +158,7 @@ export function DetailsPanel({
 	const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
 	const [isLoadingBuildLog, setIsLoadingBuildLog] = useState(false);
 	const [buildLogError, setBuildLogError] = useState<string | null>(null);
+	const [isAppLogsOpen, setIsAppLogsOpen] = useState(false);
 	const appLogRows = useMemo(() => appLogs.slice(0, 50), [appLogs]);
 	const buildRows = jobAnalytics?.builds ?? [];
 	const bucketRows =
@@ -195,7 +199,7 @@ export function DetailsPanel({
 	}
 
 	return (
-		<div className="flex min-w-0 flex-1 flex-col bg-muted/10">
+		<div className="flex min-h-0 min-w-0 flex-1 flex-col bg-muted/10">
 			<div className="flex items-center justify-between px-6 py-5">
 				<div>
 					<h1 className="text-lg font-semibold">
@@ -205,7 +209,7 @@ export function DetailsPanel({
 								: "Job details")}
 					</h1>
 					<p className="text-sm text-muted-foreground">
-						Build analytics, recent build history, and app runtime logs.
+						Build analytics, recent build history, and persisted build logs.
 					</p>
 				</div>
 				{selectedJob ? (
@@ -240,16 +244,320 @@ export function DetailsPanel({
 
 			<Separator />
 
-			<div className="flex-1 overflow-y-auto p-6">
-				<div className="flex flex-col gap-6">
-					<Card>
-						<CardHeader className="gap-3">
-							<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-								<div>
-									<CardTitle>App logs</CardTitle>
+			<div className="min-h-0 flex flex-1 flex-col">
+				<div className="flex-1 overflow-y-auto p-6">
+					<div className="flex flex-col gap-6">
+						{isLoadingJobDetails && !jobDetails ? (
+							<Card className="border-dashed bg-background/70">
+								<CardHeader>
+									<CardTitle>Loading build analytics</CardTitle>
 									<CardDescription>
-										Recent operational logs for app actions and HTTP requests.
+										Fetching persisted build data for the selected job.
 									</CardDescription>
+								</CardHeader>
+								<CardContent className="grid gap-3 xl:grid-cols-2">
+									<Skeleton className="h-72 w-full rounded-xl" />
+									<Skeleton className="h-72 w-full rounded-xl" />
+									<Skeleton className="h-52 w-full rounded-xl xl:col-span-2" />
+								</CardContent>
+							</Card>
+						) : null}
+
+						{jobDetailsError ? (
+							<Alert variant="destructive">
+								<AlertTitle>Unable to load job details</AlertTitle>
+								<AlertDescription>{jobDetailsError}</AlertDescription>
+							</Alert>
+						) : null}
+
+						{jobAnalyticsError ? (
+							<Alert variant="destructive">
+								<AlertTitle>Unable to load build analytics</AlertTitle>
+								<AlertDescription>{jobAnalyticsError}</AlertDescription>
+							</Alert>
+						) : null}
+
+						{jobActivityError ? (
+							<Alert variant="destructive">
+								<AlertTitle>Unable to load job activity</AlertTitle>
+								<AlertDescription>{jobActivityError}</AlertDescription>
+							</Alert>
+						) : null}
+
+						{!isLoadingJobDetails && !jobDetailsError && jobDetails ? (
+							<>
+								<Card>
+									<CardHeader className="gap-3">
+										<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+											<div>
+												<CardTitle>Build analytics</CardTitle>
+												<CardDescription>
+													The selected time range filters both charts and the
+													build list below.
+												</CardDescription>
+											</div>
+											<ToggleGroup
+												value={[selectedTimeRange]}
+												onValueChange={(value) => {
+													const nextValue = value[0];
+
+													if (nextValue) {
+														onTimeRangeChange(
+															nextValue as JenkinsBuildTimeRange,
+														);
+													}
+												}}
+												variant="outline"
+												size="sm"
+												disabled={isLoadingJobAnalytics}
+											>
+												{RANGE_OPTIONS.map((option) => (
+													<ToggleGroupItem
+														key={option.value}
+														value={option.value}
+													>
+														{option.label}
+													</ToggleGroupItem>
+												))}
+											</ToggleGroup>
+										</div>
+									</CardHeader>
+									<CardContent className="flex flex-col gap-6">
+										{isLoadingJobAnalytics ? (
+											<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+												{ANALYTICS_SKELETON_KEYS.map((key) => (
+													<Skeleton
+														key={key}
+														className="h-24 w-full rounded-xl"
+													/>
+												))}
+											</div>
+										) : (
+											<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+												<InfoTile
+													label="Total builds"
+													value={String(jobAnalytics?.totalBuilds ?? 0)}
+												/>
+												<InfoTile
+													label="Success rate"
+													value={formatPercent(jobAnalytics?.successRate)}
+												/>
+												<InfoTile
+													label="Successful"
+													value={String(jobAnalytics?.successfulBuilds ?? 0)}
+												/>
+												<InfoTile
+													label="Failed"
+													value={String(jobAnalytics?.failedBuilds ?? 0)}
+												/>
+												<InfoTile
+													label="Avg duration"
+													value={formatDuration(
+														jobAnalytics?.averageDurationMs ?? undefined,
+													)}
+												/>
+											</div>
+										)}
+
+										{isLoadingJobAnalytics ? (
+											<div className="grid gap-4 xl:grid-cols-2">
+												<Skeleton className="h-72 w-full rounded-xl" />
+												<Skeleton className="h-72 w-full rounded-xl" />
+											</div>
+										) : (
+											<div className="grid gap-4 xl:grid-cols-2">
+												<Card className="bg-background">
+													<CardHeader>
+														<CardTitle>Build volume</CardTitle>
+														<CardDescription>
+															Counts grouped by time bucket for the active
+															range.
+														</CardDescription>
+													</CardHeader>
+													<CardContent>
+														<ChartContainer
+															config={buildVolumeChartConfig}
+															className="h-72 w-full"
+														>
+															<BarChart data={bucketRows}>
+																<CartesianGrid vertical={false} />
+																<XAxis
+																	dataKey="label"
+																	tickLine={false}
+																	axisLine={false}
+																	minTickGap={24}
+																/>
+																<YAxis
+																	allowDecimals={false}
+																	tickLine={false}
+																	axisLine={false}
+																/>
+																<ChartTooltip
+																	content={
+																		<ChartTooltipContent
+																			labelKey="label"
+																			indicator="dashed"
+																		/>
+																	}
+																/>
+																<Bar
+																	dataKey="successful"
+																	stackId="builds"
+																	fill="var(--color-successful)"
+																	radius={[4, 4, 0, 0]}
+																/>
+																<Bar
+																	dataKey="failed"
+																	stackId="builds"
+																	fill="var(--color-failed)"
+																/>
+																<Bar
+																	dataKey="running"
+																	stackId="builds"
+																	fill="var(--color-running)"
+																/>
+															</BarChart>
+														</ChartContainer>
+													</CardContent>
+												</Card>
+
+												<Card className="bg-background">
+													<CardHeader>
+														<CardTitle>Success rate trend</CardTitle>
+														<CardDescription>
+															Percentage of successful completed builds in each
+															time bucket.
+														</CardDescription>
+													</CardHeader>
+													<CardContent>
+														<ChartContainer
+															config={successRateChartConfig}
+															className="h-72 w-full"
+														>
+															<AreaChart data={bucketRows}>
+																<CartesianGrid vertical={false} />
+																<XAxis
+																	dataKey="label"
+																	tickLine={false}
+																	axisLine={false}
+																	minTickGap={24}
+																/>
+																<YAxis
+																	domain={[0, 100]}
+																	tickFormatter={(value) => `${value}%`}
+																	tickLine={false}
+																	axisLine={false}
+																/>
+																<ChartTooltip
+																	content={
+																		<ChartTooltipContent
+																			labelKey="label"
+																			formatter={(value) => (
+																				<span className="font-mono font-medium text-foreground">
+																					{value == null
+																						? "No data"
+																						: `${value}%`}
+																				</span>
+																			)}
+																		/>
+																	}
+																/>
+																<Area
+																	type="monotone"
+																	dataKey="successRatePercent"
+																	stroke="var(--color-successRatePercent)"
+																	fill="var(--color-successRatePercent)"
+																	fillOpacity={0.18}
+																/>
+															</AreaChart>
+														</ChartContainer>
+													</CardContent>
+												</Card>
+											</div>
+										)}
+									</CardContent>
+								</Card>
+
+								<Card>
+									<CardHeader>
+										<CardTitle>Build list</CardTitle>
+										<CardDescription>
+											Recent builds constrained by the selected time range.
+										</CardDescription>
+									</CardHeader>
+									<CardContent className="flex flex-col gap-3">
+										{isLoadingJobAnalytics ? (
+											BUILD_ROW_SKELETON_KEYS.map((key) => (
+												<Skeleton
+													key={key}
+													className="h-24 w-full rounded-xl"
+												/>
+											))
+										) : buildRows.length ? (
+											buildRows.map((build) => (
+												<div
+													key={build.id}
+													className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
+												>
+													<div className="flex min-w-0 items-start gap-3">
+														<div className="pt-0.5">
+															{renderBuildIcon(build)}
+														</div>
+														<div className="min-w-0">
+															<p className="truncate text-sm font-medium">
+																{build.displayName ?? `Build #${build.number}`}
+															</p>
+															<p className="mt-1 text-xs text-muted-foreground">
+																Started{" "}
+																{build.timestamp
+																	? new Date(build.timestamp).toLocaleString()
+																	: "Unknown"}
+															</p>
+														</div>
+													</div>
+													<div className="flex flex-wrap items-center gap-2">
+														<Badge variant={getBuildBadgeVariant(build)}>
+															{getBuildStatusLabel(build)}
+														</Badge>
+														<Badge variant="outline">#{build.number}</Badge>
+														<Badge variant="outline">
+															{formatDuration(build.duration)}
+														</Badge>
+														<Button
+															size="sm"
+															variant="outline"
+															onClick={() => void handleOpenBuildLog(build)}
+														>
+															View log
+														</Button>
+													</div>
+												</div>
+											))
+										) : (
+											<p className="text-sm text-muted-foreground">
+												No builds found for the selected time range.
+											</p>
+										)}
+									</CardContent>
+								</Card>
+							</>
+						) : null}
+					</div>
+				</div>
+
+				{isAppLogsOpen ? (
+					<>
+						<Separator />
+						<div
+							id="app-log-panel"
+							className="flex max-h-[28rem] shrink-0 flex-col bg-background/95"
+						>
+							<div className="flex items-center justify-between gap-3 px-6 py-4">
+								<div>
+									<h2 className="text-sm font-semibold">App logs</h2>
+									<p className="text-sm text-muted-foreground">
+										Recent operational logs for app actions and HTTP requests.
+									</p>
 								</div>
 								<ActionIconButton
 									label={
@@ -267,350 +575,91 @@ export function DetailsPanel({
 									/>
 								</ActionIconButton>
 							</div>
-						</CardHeader>
-						<CardContent className="flex flex-col gap-3">
-							{appLogsError ? (
-								<Alert variant="destructive">
-									<AlertTitle>Unable to load app logs</AlertTitle>
-									<AlertDescription>{appLogsError}</AlertDescription>
-								</Alert>
-							) : null}
+							<div className="overflow-y-auto px-6 pb-4">
+								<div className="flex flex-col gap-3">
+									{appLogsError ? (
+										<Alert variant="destructive">
+											<AlertTitle>Unable to load app logs</AlertTitle>
+											<AlertDescription>{appLogsError}</AlertDescription>
+										</Alert>
+									) : null}
 
-							{isLoadingAppLogs && !appLogRows.length ? (
-								APP_LOG_SKELETON_KEYS.map((key) => (
-									<Skeleton key={key} className="h-24 w-full rounded-xl" />
-								))
-							) : appLogRows.length ? (
-								appLogRows.map((log) => (
-									<div
-										key={log.id}
-										className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4"
-									>
-										<div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-											<div className="min-w-0">
-												<p className="break-words text-sm font-medium">
-													{log.message}
-												</p>
-												{log.detail ? (
-													<p className="mt-1 break-words font-mono text-xs text-muted-foreground">
-														{log.detail}
-													</p>
-												) : null}
-											</div>
-											<div className="flex flex-wrap items-center gap-2 xl:justify-end">
-												<Badge variant={getAppLogLevelBadgeVariant(log.level)}>
-													{log.level.toUpperCase()}
-												</Badge>
-												<Badge variant="outline">{log.scope}</Badge>
-												{log.repeatCount > 1 ? (
-													<Badge variant="secondary">×{log.repeatCount}</Badge>
-												) : null}
-											</div>
-										</div>
-										<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-											<span>{formatLogTimestamp(log.lastSeenAt)}</span>
-											<span className="font-mono">{log.code}</span>
-										</div>
-									</div>
-								))
-							) : (
-								<p className="text-sm text-muted-foreground">
-									No app logs recorded yet.
-								</p>
-							)}
-						</CardContent>
-					</Card>
-
-					{isLoadingJobDetails && !jobDetails ? (
-						<Card className="border-dashed bg-background/70">
-							<CardHeader>
-								<CardTitle>Loading build analytics</CardTitle>
-								<CardDescription>
-									Fetching persisted build data for the selected job.
-								</CardDescription>
-							</CardHeader>
-							<CardContent className="grid gap-3 xl:grid-cols-2">
-								<Skeleton className="h-72 w-full rounded-xl" />
-								<Skeleton className="h-72 w-full rounded-xl" />
-								<Skeleton className="h-52 w-full rounded-xl xl:col-span-2" />
-							</CardContent>
-						</Card>
-					) : null}
-
-					{jobDetailsError ? (
-						<Alert variant="destructive">
-							<AlertTitle>Unable to load job details</AlertTitle>
-							<AlertDescription>{jobDetailsError}</AlertDescription>
-						</Alert>
-					) : null}
-
-					{jobAnalyticsError ? (
-						<Alert variant="destructive">
-							<AlertTitle>Unable to load build analytics</AlertTitle>
-							<AlertDescription>{jobAnalyticsError}</AlertDescription>
-						</Alert>
-					) : null}
-
-					{jobActivityError ? (
-						<Alert variant="destructive">
-							<AlertTitle>Unable to load job activity</AlertTitle>
-							<AlertDescription>{jobActivityError}</AlertDescription>
-						</Alert>
-					) : null}
-
-					{!isLoadingJobDetails && !jobDetailsError && jobDetails ? (
-						<>
-							<Card>
-								<CardHeader className="gap-3">
-									<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-										<div>
-											<CardTitle>Build analytics</CardTitle>
-											<CardDescription>
-												The selected time range filters both charts and the
-												build list below.
-											</CardDescription>
-										</div>
-										<ToggleGroup
-											value={[selectedTimeRange]}
-											onValueChange={(value) => {
-												const nextValue = value[0];
-
-												if (nextValue) {
-													onTimeRangeChange(nextValue as JenkinsBuildTimeRange);
-												}
-											}}
-											variant="outline"
-											size="sm"
-											disabled={isLoadingJobAnalytics}
-										>
-											{RANGE_OPTIONS.map((option) => (
-												<ToggleGroupItem
-													key={option.value}
-													value={option.value}
-												>
-													{option.label}
-												</ToggleGroupItem>
-											))}
-										</ToggleGroup>
-									</div>
-								</CardHeader>
-								<CardContent className="flex flex-col gap-6">
-									{isLoadingJobAnalytics ? (
-										<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-											{ANALYTICS_SKELETON_KEYS.map((key) => (
-												<Skeleton
-													key={key}
-													className="h-24 w-full rounded-xl"
-												/>
-											))}
-										</div>
-									) : (
-										<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-											<InfoTile
-												label="Total builds"
-												value={String(jobAnalytics?.totalBuilds ?? 0)}
-											/>
-											<InfoTile
-												label="Success rate"
-												value={formatPercent(jobAnalytics?.successRate)}
-											/>
-											<InfoTile
-												label="Successful"
-												value={String(jobAnalytics?.successfulBuilds ?? 0)}
-											/>
-											<InfoTile
-												label="Failed"
-												value={String(jobAnalytics?.failedBuilds ?? 0)}
-											/>
-											<InfoTile
-												label="Avg duration"
-												value={formatDuration(
-													jobAnalytics?.averageDurationMs ?? undefined,
-												)}
-											/>
-										</div>
-									)}
-
-									{isLoadingJobAnalytics ? (
-										<div className="grid gap-4 xl:grid-cols-2">
-											<Skeleton className="h-72 w-full rounded-xl" />
-											<Skeleton className="h-72 w-full rounded-xl" />
-										</div>
-									) : (
-										<div className="grid gap-4 xl:grid-cols-2">
-											<Card className="bg-background">
-												<CardHeader>
-													<CardTitle>Build volume</CardTitle>
-													<CardDescription>
-														Counts grouped by time bucket for the active range.
-													</CardDescription>
-												</CardHeader>
-												<CardContent>
-													<ChartContainer
-														config={buildVolumeChartConfig}
-														className="h-72 w-full"
-													>
-														<BarChart data={bucketRows}>
-															<CartesianGrid vertical={false} />
-															<XAxis
-																dataKey="label"
-																tickLine={false}
-																axisLine={false}
-																minTickGap={24}
-															/>
-															<YAxis
-																allowDecimals={false}
-																tickLine={false}
-																axisLine={false}
-															/>
-															<ChartTooltip
-																content={
-																	<ChartTooltipContent
-																		labelKey="label"
-																		indicator="dashed"
-																	/>
-																}
-															/>
-															<Bar
-																dataKey="successful"
-																stackId="builds"
-																fill="var(--color-successful)"
-																radius={[4, 4, 0, 0]}
-															/>
-															<Bar
-																dataKey="failed"
-																stackId="builds"
-																fill="var(--color-failed)"
-															/>
-															<Bar
-																dataKey="running"
-																stackId="builds"
-																fill="var(--color-running)"
-															/>
-														</BarChart>
-													</ChartContainer>
-												</CardContent>
-											</Card>
-
-											<Card className="bg-background">
-												<CardHeader>
-													<CardTitle>Success rate trend</CardTitle>
-													<CardDescription>
-														Percentage of successful completed builds in each
-														time bucket.
-													</CardDescription>
-												</CardHeader>
-												<CardContent>
-													<ChartContainer
-														config={successRateChartConfig}
-														className="h-72 w-full"
-													>
-														<AreaChart data={bucketRows}>
-															<CartesianGrid vertical={false} />
-															<XAxis
-																dataKey="label"
-																tickLine={false}
-																axisLine={false}
-																minTickGap={24}
-															/>
-															<YAxis
-																domain={[0, 100]}
-																tickFormatter={(value) => `${value}%`}
-																tickLine={false}
-																axisLine={false}
-															/>
-															<ChartTooltip
-																content={
-																	<ChartTooltipContent
-																		labelKey="label"
-																		formatter={(value) => (
-																			<span className="font-mono font-medium text-foreground">
-																				{value == null
-																					? "No data"
-																					: `${value}%`}
-																			</span>
-																		)}
-																	/>
-																}
-															/>
-															<Area
-																type="monotone"
-																dataKey="successRatePercent"
-																stroke="var(--color-successRatePercent)"
-																fill="var(--color-successRatePercent)"
-																fillOpacity={0.18}
-															/>
-														</AreaChart>
-													</ChartContainer>
-												</CardContent>
-											</Card>
-										</div>
-									)}
-								</CardContent>
-							</Card>
-
-							<Card>
-								<CardHeader>
-									<CardTitle>Build list</CardTitle>
-									<CardDescription>
-										Recent builds constrained by the selected time range.
-									</CardDescription>
-								</CardHeader>
-								<CardContent className="flex flex-col gap-3">
-									{isLoadingJobAnalytics ? (
-										BUILD_ROW_SKELETON_KEYS.map((key) => (
+									{isLoadingAppLogs && !appLogRows.length ? (
+										APP_LOG_SKELETON_KEYS.map((key) => (
 											<Skeleton key={key} className="h-24 w-full rounded-xl" />
 										))
-									) : buildRows.length ? (
-										buildRows.map((build) => (
+									) : appLogRows.length ? (
+										appLogRows.map((log) => (
 											<div
-												key={build.id}
-												className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4 xl:flex-row xl:items-center xl:justify-between"
+												key={log.id}
+												className="flex flex-col gap-3 rounded-xl border bg-background px-4 py-4"
 											>
-												<div className="flex min-w-0 items-start gap-3">
-													<div className="pt-0.5">{renderBuildIcon(build)}</div>
+												<div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
 													<div className="min-w-0">
-														<p className="truncate text-sm font-medium">
-															{build.displayName ?? `Build #${build.number}`}
+														<p className="break-words text-sm font-medium">
+															{log.message}
 														</p>
-														<p className="mt-1 text-xs text-muted-foreground">
-															Started{" "}
-															{build.timestamp
-																? new Date(build.timestamp).toLocaleString()
-																: "Unknown"}
-														</p>
+														{log.detail ? (
+															<p className="mt-1 break-words font-mono text-xs text-muted-foreground">
+																{log.detail}
+															</p>
+														) : null}
+													</div>
+													<div className="flex flex-wrap items-center gap-2 xl:justify-end">
+														<Badge
+															variant={getAppLogLevelBadgeVariant(log.level)}
+														>
+															{log.level.toUpperCase()}
+														</Badge>
+														<Badge variant="outline">{log.scope}</Badge>
+														{log.repeatCount > 1 ? (
+															<Badge variant="secondary">
+																×{log.repeatCount}
+															</Badge>
+														) : null}
 													</div>
 												</div>
-												<div className="flex flex-wrap items-center gap-2">
-													<Badge variant={getBuildBadgeVariant(build)}>
-														{getBuildStatusLabel(build)}
-													</Badge>
-													<Badge variant="outline">#{build.number}</Badge>
-													<Badge variant="outline">
-														{formatDuration(build.duration)}
-													</Badge>
-													<Button
-														size="sm"
-														variant="outline"
-														onClick={() => void handleOpenBuildLog(build)}
-													>
-														View log
-													</Button>
+												<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+													<span>{formatLogTimestamp(log.lastSeenAt)}</span>
+													<span className="font-mono">{log.code}</span>
 												</div>
 											</div>
 										))
 									) : (
 										<p className="text-sm text-muted-foreground">
-											No builds found for the selected time range.
+											No app logs recorded yet.
 										</p>
 									)}
-								</CardContent>
-							</Card>
-						</>
-					) : null}
+								</div>
+							</div>
+						</div>
+					</>
+				) : null}
+
+				<div className="border-t bg-background/95 px-4 py-2">
+					<Button
+						variant="ghost"
+						size="sm"
+						className="w-full justify-between"
+						aria-controls="app-log-panel"
+						aria-expanded={isAppLogsOpen}
+						onClick={() => setIsAppLogsOpen((current) => !current)}
+					>
+						<span className="flex min-w-0 items-center gap-2">
+							<ScrollText />
+							<span>App logs</span>
+							<span className="truncate text-xs text-muted-foreground">
+								{appLogsError
+									? "Unavailable"
+									: `${appLogRows.length} recent ${appLogRows.length === 1 ? "entry" : "entries"}`}
+							</span>
+						</span>
+						<span className="text-muted-foreground">
+							{isAppLogsOpen ? <ChevronDown /> : <ChevronUp />}
+						</span>
+					</Button>
 				</div>
 			</div>
-
 			<Dialog open={isLogDialogOpen} onOpenChange={setIsLogDialogOpen}>
 				<DialogContent className="sm:max-w-[56rem]">
 					<DialogHeader className="pr-8">
