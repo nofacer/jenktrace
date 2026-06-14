@@ -1,0 +1,19 @@
+.omp/commands/release.md
+  s_64e8fdb82cd44c::t_518424cc668c02 7-14,17,22,33-35,41-42,48-49,53,60-65,69,84,86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.6",
+  "base_commit_sha": "cb5830a9ba5a91751010d947fdeba4cd2bce8641",
+  "prompts": {},
+  "sessions": {
+    "s_64e8fdb82cd44c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ec568-516f-7c62-b00b-245b707760fc",
+        "model": "gpt-5.4"
+      },
+      "human_author": "PosiNorth <nofacer@outlook.com>"
+    }
+  }
+}
